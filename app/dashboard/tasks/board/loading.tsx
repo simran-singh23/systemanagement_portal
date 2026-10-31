@@ -1,0 +1,1 @@
+export default function LoadingBoard() { return <div className="animate-pulse space-y-5"><div className="h-20 rounded-2xl bg-white" /><div className="flex gap-4 overflow-hidden rounded-2xl bg-white p-4">{Array.from({ length: 4 }, (_, index) => <div key={index} className="h-[32rem] w-72 shrink-0 rounded-2xl bg-[#eef1f5]" />)}</div></div>; }

@@ -1,0 +1,24 @@
+"use client";
+
+import { useMemo, useState } from "react";
+import { Download, Search } from "lucide-react";
+import type { AnalyticsDashboardData, TableRow } from "@/lib/analytics/types";
+
+const configs = {
+  attendance: ["expected", "present", "late", "leave", "absent"], tasks: ["open", "completed", "blocked", "review"],
+  hours: ["officeHours", "netHours", "trackedHours", "unallocatedHours"], reports: ["expected", "submitted", "drafts", "missing"],
+} as const;
+type Dataset = keyof typeof configs;
+
+export function AnalyticsDataTable({ data, query, personal = false }: { data: AnalyticsDashboardData["tables"]; query: string; personal?: boolean }) {
+  const [dataset, setDataset] = useState<Dataset>("attendance"); const [search, setSearch] = useState(""); const [sort, setSort] = useState("employee"); const [descending, setDescending] = useState(false); const [page, setPage] = useState(1);
+  const rows = useMemo(() => data[dataset].filter((row) => `${row.employee} ${row.team} ${row.department}`.toLowerCase().includes(search.toLowerCase())).toSorted((a, b) => { const left = a[sort]; const right = b[sort]; const result = typeof left === "number" && typeof right === "number" ? left - right : String(left).localeCompare(String(right)); return descending ? -result : result; }), [data, dataset, search, sort, descending]);
+  const pages = Math.max(1, Math.ceil(rows.length / 8)); const visible = rows.slice((Math.min(page, pages) - 1) * 8, Math.min(page, pages) * 8); const columns = ["employee", ...(personal ? [] : ["team", "department"]), ...configs[dataset]];
+  const changeDataset = (value: Dataset) => { setDataset(value); setPage(1); setSort("employee"); };
+  return <section className="overflow-hidden rounded-2xl border border-[#e1e7ef] bg-white"><div className="flex flex-col gap-3 border-b border-[#edf0f4] p-4 lg:flex-row lg:items-center lg:justify-between"><div className="flex flex-wrap gap-1">{(Object.keys(configs) as Dataset[]).map((item) => <button key={item} type="button" onClick={() => changeDataset(item)} className={`rounded-lg px-3 py-2 text-xs font-semibold capitalize ${dataset === item ? "bg-[#172033] text-white" : "text-[#667085] hover:bg-[#f2f4f7]"}`}>{item}</button>)}</div><div className="flex flex-col gap-2 sm:flex-row"><label className="relative"><Search className="absolute left-3 top-2.5 size-4 text-[#98a2b3]" /><input value={search} onChange={(event) => { setSearch(event.target.value); setPage(1); }} placeholder="Search people" className="h-9 rounded-xl border border-[#dfe4eb] pl-9 pr-3 text-sm" /></label><a href={`/api/analytics/export?dataset=${dataset}&${query}`} className="inline-flex h-9 items-center justify-center gap-2 rounded-xl border border-[#cbd9f2] px-3 text-xs font-semibold text-[#2555a7]"><Download className="size-4" />CSV</a></div></div>
+    {visible.length ? <div className="overflow-x-auto"><table className="w-full min-w-[720px] text-left"><thead><tr className="bg-[#fafbfc]">{columns.map((column) => <th key={column} className="px-4 py-3 text-[10px] font-semibold uppercase tracking-[0.08em] text-[#98a2b3]"><button type="button" onClick={() => { if (sort === column) setDescending((value) => !value); else { setSort(column); setDescending(false); } }} className="hover:text-[#475467]">{label(column)}{sort === column ? descending ? " ↓" : " ↑" : ""}</button></th>)}</tr></thead><tbody className="divide-y divide-[#edf0f4]">{visible.map((row) => <tr key={row.id} className="hover:bg-[#fbfcff]">{columns.map((column) => <td key={column} className={`px-4 py-3 text-sm ${column === "employee" ? "font-semibold text-[#344054]" : "text-[#667085]"}`}>{formatCell(row, column)}</td>)}</tr>)}</tbody></table></div> : <div className="px-5 py-12 text-center text-sm text-[#7c8799]">No matching summary rows.</div>}
+    <div className="flex items-center justify-between border-t border-[#edf0f4] px-4 py-3 text-xs text-[#7c8799]"><span>{rows.length} rows · page {Math.min(page, pages)} of {pages}</span><div className="flex gap-2"><button disabled={page <= 1} onClick={() => setPage((value) => Math.max(1, value - 1))} className="rounded-lg border px-3 py-1.5 disabled:opacity-40">Previous</button><button disabled={page >= pages} onClick={() => setPage((value) => Math.min(pages, value + 1))} className="rounded-lg border px-3 py-1.5 disabled:opacity-40">Next</button></div></div>
+  </section>;
+}
+function label(value: string) { return value.replace(/([A-Z])/g, " $1").replace(/^./, (letter) => letter.toUpperCase()); }
+function formatCell(row: TableRow, column: string) { const value = row[column]; return column.endsWith("Hours") && typeof value === "number" ? `${value.toFixed(1)}h` : value; }

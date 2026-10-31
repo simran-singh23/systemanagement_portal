@@ -1,26 +1,191 @@
 @import "tailwindcss";
 
 :root {
-  --background: #ffffff;
-  --foreground: #171717;
+  --canvas: #f5f7fb;
+  --surface: #ffffff;
+  --ink: #172033;
+  --muted: #667085;
+  --line: #e6eaf0;
+  --blue: #2563eb;
+  --blue-soft: #eef4ff;
+  --mint-soft: #eaf8f2;
+  --surface-subtle: #f8fafc;
+  --surface-raised: #ffffff;
+  --surface-translucent: rgba(255, 255, 255, 0.9);
+  --muted-2: #8a95a6;
+  --blue-strong: #1d55c6;
+  --danger: #b42318;
+  --radius-card: 1rem;
+}
+
+.dark {
+  --canvas: #0b1120;
+  --surface: #111827;
+  --surface-raised: #182235;
+  --surface-subtle: #172033;
+  --surface-translucent: rgba(17, 24, 39, 0.9);
+  --ink: #edf2f8;
+  --muted: #aab4c3;
+  --muted-2: #7f8b9d;
+  --line: #293449;
+  --blue: #6f9cff;
+  --blue-strong: #9bbaff;
+  --blue-soft: #172b50;
+  --mint-soft: #10362d;
 }
 
 @theme inline {
-  --color-background: var(--background);
-  --color-foreground: var(--foreground);
-  --font-sans: var(--font-geist-sans);
-  --font-mono: var(--font-geist-mono);
+  --color-background: var(--canvas);
+  --color-foreground: var(--ink);
+  --font-sans: "Avenir Next", "Segoe UI", Arial, sans-serif;
+  --font-mono: "SFMono-Regular", Consolas, "Liberation Mono", monospace;
 }
 
-@media (prefers-color-scheme: dark) {
-  :root {
-    --background: #0a0a0a;
-    --foreground: #ededed;
-  }
+* {
+  box-sizing: border-box;
 }
 
 body {
-  background: var(--background);
-  color: var(--foreground);
-  font-family: Arial, Helvetica, sans-serif;
+  margin: 0;
+  overflow-x: hidden;
+  background: var(--canvas);
+  color: var(--ink);
+  font-family: var(--font-sans);
+}
+
+html { scroll-behavior: smooth; }
+
+body,
+button,
+input,
+select,
+textarea { font-family: var(--font-sans); }
+
+button,
+[role="button"],
+summary,
+select { cursor: pointer; }
+
+button:disabled,
+input:disabled,
+select:disabled,
+textarea:disabled { cursor: not-allowed; opacity: .6; }
+
+.tf-page-header {
+  display: flex;
+  flex-direction: column;
+  gap: 1rem;
+}
+
+.tf-eyebrow { color: var(--blue); font-size: .75rem; font-weight: 650; }
+.tf-page-title { color: var(--ink); font-size: clamp(1.75rem, 3vw, 2.125rem); font-weight: 650; letter-spacing: -.045em; line-height: 1.15; }
+.tf-page-description { margin-top: .5rem; max-width: 48rem; color: var(--muted); font-size: .875rem; line-height: 1.5rem; }
+
+.tf-icon-button {
+  display: grid;
+  width: 2.75rem;
+  height: 2.75rem;
+  flex: none;
+  place-items: center;
+  border: 1px solid var(--line);
+  border-radius: .75rem;
+  background: var(--surface);
+  color: var(--muted);
+  transition: background-color 160ms ease, border-color 160ms ease, color 160ms ease;
+}
+.tf-icon-button:hover { border-color: color-mix(in srgb, var(--blue) 30%, var(--line)); background: var(--surface-subtle); color: var(--ink); }
+
+.tf-button-primary {
+  display: inline-flex;
+  min-height: 2.75rem;
+  align-items: center;
+  justify-content: center;
+  gap: .5rem;
+  border-radius: .75rem;
+  background: var(--blue);
+  padding: .625rem 1rem;
+  color: white;
+  font-size: .875rem;
+  font-weight: 650;
+  transition: filter 160ms ease, transform 160ms ease;
+}
+.tf-button-primary:hover { filter: brightness(.94); }
+.tf-button-primary:active { transform: translateY(1px); }
+
+.tf-empty-state,
+.tf-error-state { display: grid; min-height: 16rem; place-items: center; align-content: center; border: 1px dashed var(--line); border-radius: var(--radius-card); background: var(--surface); padding: 2rem 1.5rem; text-align: center; }
+.tf-error-state { border-style: solid; }
+
+table { border-collapse: separate; border-spacing: 0; }
+thead th { position: sticky; top: 0; z-index: 1; }
+
+dialog::backdrop { animation: tf-backdrop 180ms ease-out; }
+dialog[open] { animation: tf-dialog 180ms ease-out; }
+@keyframes tf-backdrop { from { opacity: 0; } }
+@keyframes tf-dialog { from { opacity: 0; transform: translateY(8px) scale(.985); } }
+
+@media (min-width: 640px) {
+  .tf-page-header { flex-direction: row; align-items: flex-end; justify-content: space-between; }
+}
+
+/* Compatibility layer while legacy screens migrate from literal light colors. */
+.dark .bg-white { background-color: var(--surface); }
+.dark [class~="bg-[#f5f7fb]"], .dark [class~="bg-[#fafbfc]"], .dark [class~="bg-[#f7f8fa]"], .dark [class~="bg-[#f8fafc]"] { background-color: var(--surface-subtle); }
+.dark [class~="bg-[#eef1f5]"], .dark [class~="bg-[#edf0f4]"], .dark [class~="bg-[#f2f4f7]"] { background-color: #202b3d; }
+.dark [class~="bg-[#172033]"] { background-color: #080d18; }
+.dark [class~="text-[#172033]"], .dark [class~="text-[#253047]"], .dark [class~="text-[#344054]"], .dark [class~="text-[#475467]"] { color: var(--ink); }
+.dark [class~="text-[#536071]"], .dark [class~="text-[#667085]"], .dark [class~="text-[#7c8799]"], .dark [class~="text-[#98a2b3]"] { color: var(--muted); }
+.dark [class*="border-[#e"], .dark [class*="border-[#d"] { border-color: var(--line); }
+.dark input, .dark select, .dark textarea { border-color: var(--line); background-color: var(--surface); color: var(--ink); }
+.dark input::placeholder, .dark textarea::placeholder { color: var(--muted-2); }
+.dark .recharts-cartesian-grid line { stroke: #2a3548; }
+.dark .recharts-text { fill: var(--muted); }
+
+@media print {
+  aside, header, nav, .print\:hidden { display: none !important; }
+  main { margin: 0 !important; padding: 0 !important; }
+  body { background: white !important; }
+}
+
+button,
+input,
+select,
+textarea {
+  font: inherit;
+}
+
+button,
+a {
+  -webkit-tap-highlight-color: transparent;
+  touch-action: manipulation;
+}
+
+h1,
+h2,
+h3,
+h4,
+h5,
+h6 {
+  scroll-margin-top: 5rem;
+}
+
+::selection {
+  background: #cfe0ff;
+  color: #15366f;
+}
+
+:focus-visible {
+  outline: 3px solid rgba(37, 99, 235, 0.28);
+  outline-offset: 2px;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    scroll-behavior: auto !important;
+    transition-duration: 0.01ms !important;
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+  }
 }

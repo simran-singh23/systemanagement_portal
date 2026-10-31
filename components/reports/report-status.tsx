@@ -1,0 +1,2 @@
+import type { ReportStatus } from "@prisma/client";
+export function ReportStatusBadge({ status }: { status: ReportStatus }) { const tone = status === "SUBMITTED" ? "bg-[#eaf8f2] text-[#157357]" : status === "REVIEWED" ? "bg-[#eef4ff] text-[#2555a7]" : "bg-[#fff6e5] text-[#a35f00]"; return <span className={`inline-flex rounded-full px-2.5 py-1 text-[11px] font-semibold ${tone}`}>{status.toLowerCase().replace(/^./, (letter) => letter.toUpperCase())}</span>; }

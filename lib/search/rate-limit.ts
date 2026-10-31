@@ -1,0 +1,4 @@
+const WINDOW_MS = 60_000;
+const MAX_REQUESTS = 40;
+const buckets = new Map<string, { windowStartedAt: number; count: number }>();
+export function consumeSearchRateLimit(key: string, now = Date.now()) { const existing = buckets.get(key); if (!existing || now - existing.windowStartedAt >= WINDOW_MS) { buckets.set(key, { windowStartedAt: now, count: 1 }); return { allowed: true, remaining: MAX_REQUESTS - 1, retryAfterSeconds: 0 }; } existing.count += 1; if (buckets.size > 5_000) for (const [bucketKey, bucket] of buckets) if (now - bucket.windowStartedAt >= WINDOW_MS) buckets.delete(bucketKey); return { allowed: existing.count <= MAX_REQUESTS, remaining: Math.max(0, MAX_REQUESTS - existing.count), retryAfterSeconds: Math.max(1, Math.ceil((WINDOW_MS - (now - existing.windowStartedAt)) / 1000)) }; }

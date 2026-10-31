@@ -1,0 +1,1 @@
+export default function LoadingManagerReports() { return <div className="animate-pulse space-y-6"><div className="h-20 rounded-2xl bg-white" /><div className="h-44 rounded-2xl bg-white" /><div className="h-[30rem] rounded-2xl bg-white" /></div>; }
