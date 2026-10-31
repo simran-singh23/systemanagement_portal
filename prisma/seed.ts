@@ -1,14 +1,14 @@
-import "dotenv/config";
+import "../env.config";
 import { PrismaPg } from "@prisma/adapter-pg";
 import { PrismaClient } from "@prisma/client";
+import { hashPassword, newPasswordSchema } from "../lib/password";
 
 if (process.env.NODE_ENV === "production" || process.env.VERCEL_ENV === "production") {
   throw new Error("Development seed data must never run against a production environment.");
 }
 
-const connectionString =
-  process.env.DATABASE_URL ??
-  "postgresql://postgres:postgres@127.0.0.1:5432/teamflow?schema=public";
+const connectionString = process.env.DATABASE_URL;
+if (!connectionString) throw new Error("DATABASE_URL is required to seed development data.");
 const prisma = new PrismaClient({ adapter: new PrismaPg({ connectionString }) });
 
 const ids = {
@@ -50,7 +50,14 @@ const plusDays = (days: number) => {
   return date;
 };
 
+// Optional local login for the demo users, so development works without Google OAuth or Resend.
+const devPassword = process.env.SEED_DEV_PASSWORD?.trim();
+if (devPassword && !newPasswordSchema.safeParse(devPassword).success) {
+  throw new Error("SEED_DEV_PASSWORD must be at least 12 characters.");
+}
+
 async function main() {
+  const devPasswordHash = devPassword ? await hashPassword(devPassword) : undefined;
   await prisma.$transaction(async (tx) => {
     const users = [
       { id: ids.superAdmin, name: "Riya Sharma", email: "admin@teamflow.dev", role: "SUPER_ADMIN" as const, jobTitle: "Platform administrator" },
@@ -61,10 +68,11 @@ async function main() {
     ];
 
     for (const user of users) {
+      const login = devPasswordHash ? { passwordHash: devPasswordHash } : {};
       await tx.user.upsert({
         where: { email: user.email },
-        update: { id: user.id, name: user.name, role: user.role, status: "ACTIVE", jobTitle: user.jobTitle, emailVerified: startOfToday },
-        create: { ...user, status: "ACTIVE", emailVerified: startOfToday },
+        update: { id: user.id, name: user.name, role: user.role, status: "ACTIVE", jobTitle: user.jobTitle, emailVerified: startOfToday, ...login },
+        create: { ...user, status: "ACTIVE", emailVerified: startOfToday, ...login },
       });
     }
 

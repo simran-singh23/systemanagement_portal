@@ -8,11 +8,12 @@ import { dailyReportSchema, type FormState } from "@/lib/validations";
 import { databaseDate, dateKeyInZone } from "@/lib/date-time";
 import { getReportDayData, reportSnapshot } from "@/lib/reports";
 import { createNotifications, getAuthorizedReviewerIds } from "@/lib/notifications";
+import { lockTransaction } from "@/lib/transaction-lock";
 
 const value = (formData: FormData, key: string) => String(formData.get(key) ?? "");
 const parse = (formData: FormData) => dailyReportSchema.safeParse({ organizationId: value(formData, "organizationId"), reportDate: value(formData, "reportDate"), summary: value(formData, "summary"), completedWork: value(formData, "completedWork"), progress: value(formData, "progress"), blockers: value(formData, "blockers"), nextPlan: value(formData, "nextPlan"), additionalNotes: value(formData, "additionalNotes"), pulse: value(formData, "pulse"), pulseBlocker: value(formData, "pulseBlocker") });
 const refresh = (reportId?: string) => { revalidatePath("/employee/reports"); revalidatePath("/dashboard/reports"); revalidatePath("/employee"); revalidatePath("/dashboard"); if (reportId) revalidatePath(`/dashboard/reports/${reportId}`); };
-async function lock(tx: Prisma.TransactionClient, organizationId: string, userId: string, date: string) { await tx.$queryRaw`SELECT pg_advisory_xact_lock(hashtextextended(${`${organizationId}:${userId}:${date}`}, 0))`; }
+async function lock(tx: Prisma.TransactionClient, organizationId: string, userId: string, date: string) { await lockTransaction(tx, `${organizationId}:${userId}:${date}`); }
 
 async function persist(formData: FormData, submit: boolean): Promise<FormState> {
   const parsed = parse(formData);

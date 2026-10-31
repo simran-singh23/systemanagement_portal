@@ -18,7 +18,8 @@ export function ActiveTaskTimer({ organizationId, initialNow, active, tasks, che
   const [pauseState, pauseAction, pausing] = useActionState(pauseTaskTimer, initial);
   const [stopState, stopAction, stopping] = useActionState(stopTaskTimer, initial);
   useEffect(() => { const id = window.setInterval(() => setNow(new Date()), 1000); return () => window.clearInterval(id); }, []);
-  const chosen = tasks.find((task) => task.id === selected);
+  const selectedTaskId = tasks.some((task) => task.id === selected) ? selected : tasks.find((task) => task.hasSessions)?.id ?? tasks[0]?.id ?? "";
+  const chosen = tasks.find((task) => task.id === selectedTaskId);
   const liveMs = active ? active.totalMsAtServer + Math.max(0, now.getTime() - new Date(initialNow).getTime()) : 0;
   const state = [stopState, pauseState, resumeState, startState].find((item) => item.message);
   const busy = starting || resuming || pausing || stopping;
@@ -34,7 +35,7 @@ export function ActiveTaskTimer({ organizationId, initialNow, active, tasks, che
       </div>
       <div className="p-5 sm:p-6">
         <p className="text-sm font-semibold text-[#253047]">Task queue</p><p className="mt-1 text-xs leading-5 text-[#7c8799]">One task can run at a time. A break pauses it automatically.</p>
-        {!active && tasks.length ? <><label className="mt-5 block text-xs font-medium text-[#667085]">Assigned task<select value={selected} onChange={(event) => setSelected(event.target.value)} className="mt-2 h-11 w-full rounded-xl border border-[#dfe4eb] bg-white px-3 text-sm text-[#344054] outline-none focus:border-[#80a7f5]">{tasks.map((task) => <option key={task.id} value={task.id}>{task.title}</option>)}</select></label><div className="mt-3 grid gap-2 min-[390px]:grid-cols-2"><TimerForm action={startAction} organizationId={organizationId} taskId={selected} disabled={busy || !checkedIn || onBreak || Boolean(chosen?.hasSessions)} label={starting ? "Starting…" : "Start"} style="dark" /><TimerForm action={resumeAction} organizationId={organizationId} taskId={selected} disabled={busy || !checkedIn || onBreak || !chosen?.hasSessions} label={resuming ? "Resuming…" : "Resume"} style="outline" /></div></> : null}
+        {!active && tasks.length ? <><label className="mt-5 block text-xs font-medium text-[#667085]">Assigned task<select value={selectedTaskId} onChange={(event) => setSelected(event.target.value)} className="mt-2 h-11 w-full rounded-xl border border-[#dfe4eb] bg-white px-3 text-sm text-[#344054] outline-none focus:border-[#80a7f5]">{tasks.map((task) => <option key={task.id} value={task.id}>{task.title}</option>)}</select></label><div className="mt-3 grid gap-2 min-[390px]:grid-cols-2"><TimerForm action={startAction} organizationId={organizationId} taskId={selectedTaskId} disabled={busy || !checkedIn || onBreak || Boolean(chosen?.hasSessions)} label={starting ? "Starting…" : "Start"} style="dark" /><TimerForm action={resumeAction} organizationId={organizationId} taskId={selectedTaskId} disabled={busy || !checkedIn || onBreak || !chosen?.hasSessions} label={resuming ? "Resuming…" : "Resume"} style="outline" /></div></> : null}
         {!tasks.length ? <div className="mt-5 rounded-xl border border-dashed border-[#d8dee8] px-4 py-8 text-center text-sm text-[#7c8799]">No active assigned tasks.</div> : null}
         {chosen && !active ? <div className="mt-4 flex items-center justify-between border-t border-[#edf0f4] pt-4 text-xs"><span className="text-[#7c8799]">Tracked / estimate</span><span className="font-mono font-semibold text-[#344054]">{formatMilliseconds(chosen.totalMs)} / {chosen.estimatedMins ? `${Math.floor(chosen.estimatedMins / 60)}h ${chosen.estimatedMins % 60}m` : "No estimate"}</span></div> : null}
       </div>

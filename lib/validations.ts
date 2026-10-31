@@ -1,4 +1,5 @@
 import { z } from "zod";
+import { taskDateSchema } from "./task-dates";
 
 export const assignableRoles = [
   "PRODUCT_MANAGER",
@@ -40,7 +41,7 @@ export const taskPriorities = ["LOW", "MEDIUM", "HIGH", "URGENT"] as const;
 
 const optionalId = z.string().trim().optional().transform((value) => value || undefined);
 const optionalDate = z.string().trim().optional().transform((value) => value || undefined).refine(
-  (value) => !value || !Number.isNaN(Date.parse(value)),
+  (value) => !value || taskDateSchema.safeParse(value).success,
   "Enter a valid date and time.",
 );
 

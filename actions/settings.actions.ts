@@ -16,6 +16,7 @@ import {
 } from "@/lib/organization-settings";
 import { prisma } from "@/lib/prisma";
 import { emailSenderConfigured } from "@/lib/email/delivery";
+import { reportRecipientWhere } from "@/lib/email/recipients";
 
 export type SettingsActionState = { success?: boolean; message?: string; errors?: Record<string, string[]> };
 
@@ -117,7 +118,7 @@ export async function updateOrganizationSettings(_state: SettingsActionState, fo
   const recipientIds = [...additionalReportRecipientIds, parsed.data.primaryReportRecipientId].filter((value): value is string => Boolean(value));
   if (recipientIds.length) {
     const permitted = await prisma.user.findMany({
-      where: { id: { in: recipientIds }, status: "ACTIVE", emailVerified: { not: null }, OR: [{ ownedOrganizations: { some: { id: context.organization.id } }, role: "SUPER_ADMIN" }, { organizationMembers: { some: { organizationId: context.organization.id, status: "ACTIVE", role: { in: ["SUPER_ADMIN", "PRODUCT_MANAGER"] } } } }] },
+      where: { ...reportRecipientWhere(context.organization.id), id: { in: recipientIds } },
       select: { email: true },
     });
     if (permitted.length !== new Set(recipientIds).size) return { message: "Report recipients must be active, verified organization managers." };

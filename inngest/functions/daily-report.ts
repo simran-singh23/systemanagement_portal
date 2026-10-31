@@ -1,6 +1,7 @@
 import { automationRunEvent, inngest } from "@/inngest/client";
 import { executeAutomation } from "@/lib/automation";
 import { deliverDailyEmail } from "@/lib/email/delivery";
+import { NonRetriableError } from "inngest";
 
 export const dailyReportAutomation = inngest.createFunction(
   { id: "teamflow-daily-report-reminders", name: "Daily report reminders and alerts", retries: 4, idempotency: "event.data.runKey", triggers: [{ event: automationRunEvent, if: 'event.data.automation == "DAILY_REPORT_REMINDER" || event.data.automation == "MISSING_DAILY_REPORT"' }] },
@@ -24,6 +25,7 @@ export const dailyEmailAutomation = inngest.createFunction(
   { id: "teamflow-daily-email-report", name: "Deliver daily team report email", retries: 4, idempotency: "event.data.runKey", triggers: [{ event: automationRunEvent, if: 'event.data.automation == "DAILY_EMAIL_REPORT"' }] },
   async ({ event, step, logger }) => {
     const result = await step.run("deliver-daily-team-email", () => deliverDailyEmail(event.data.organizationId, event.data.workDate, event.data.scheduledFor, event.data.runKey));
+    if (result.status === "FAILED") throw new NonRetriableError("Daily email delivery requires manual review. See the delivery history.");
     logger.info("Daily team email delivery processed", { organizationId: event.data.organizationId, workDate: event.data.workDate, status: result.status, acceptedByProvider: result.deliveredToProvider });
     return result;
   },

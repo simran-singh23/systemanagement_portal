@@ -1,13 +1,13 @@
 "use server";
 
 import { revalidatePath } from "next/cache";
-import type { Prisma } from "@prisma/client";
 import { prisma } from "@/lib/prisma";
 import { requireOrganizationPermission } from "@/lib/dal/auth";
 import { attendanceActionSchema, type FormState } from "@/lib/validations";
 import { attendanceWorkdayKey, databaseDate, durationMinutes, isLateCheckIn } from "@/lib/date-time";
 import { createNotifications, getAuthorizedReviewerIds } from "@/lib/notifications";
 import { assertActiveOrganizationAccess } from "@/lib/member-access";
+import { lockTransaction as lockUser } from "@/lib/transaction-lock";
 
 const DEFAULT_SETTINGS = {
   timezone: "Asia/Kolkata",
@@ -16,7 +16,6 @@ const DEFAULT_SETTINGS = {
   overnightShiftEnabled: false,
   lateGraceMins: 15,
 };
-async function lockUser(tx: Prisma.TransactionClient, userId: string) { await tx.$queryRaw`SELECT pg_advisory_xact_lock(hashtextextended(${userId}, 0))`; }
 
 function refreshAttendance() {
   revalidatePath("/employee/attendance");

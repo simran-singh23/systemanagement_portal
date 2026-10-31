@@ -1,5 +1,4 @@
 import { createHash } from "node:crypto";
-import { prisma } from "@/lib/prisma";
 
 const WINDOW_MS = 15 * 60_000;
 const EMAIL_MAX_ATTEMPTS = 8;
@@ -14,6 +13,7 @@ function keyHash(scope: string, value: string) {
 }
 
 async function incrementWindow(key: string) {
+  const { prisma } = await import("@/lib/prisma");
   const rows = await prisma.$queryRaw<Array<{ attempts: number }>>`
     INSERT INTO "auth_rate_limits" ("key_hash", "window_started_at", "attempts")
     VALUES (${key}, NOW(), 1)

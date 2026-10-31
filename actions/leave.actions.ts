@@ -9,14 +9,11 @@ import { countWorkingLeaveDays, monthBounds, workingLeaveDateKeys } from "@/lib/
 import { leaveCancelSchema, leaveDecisionSchema, leaveRequestSchema, type FormState } from "@/lib/validations";
 import { createNotification, createNotifications, getAuthorizedReviewerIds } from "@/lib/notifications";
 import { allowedValue, boundedPage } from "@/lib/search/params";
+import { lockTransaction as lock } from "@/lib/transaction-lock";
 
 const value = (formData: FormData, key: string) => String(formData.get(key) ?? "");
 const refresh = () => { revalidatePath("/employee/leave"); revalidatePath("/dashboard/leave"); revalidatePath("/employee/attendance"); revalidatePath("/dashboard/attendance"); revalidatePath("/dashboard/reports"); revalidatePath("/dashboard"); revalidatePath("/employee"); };
 const teamLeadScope = (role: string, actorId: string): Prisma.LeaveRequestWhereInput => role === "TEAM_LEAD" ? { user: { teamMembers: { some: { team: { managerId: actorId } } } } } : {};
-
-async function lock(tx: Prisma.TransactionClient, key: string) {
-  await tx.$queryRaw`SELECT pg_advisory_xact_lock(hashtextextended(${key}, 0))`;
-}
 
 async function policyData(client: Prisma.TransactionClient | typeof prisma, organizationId: string, startDate: string, endDate: string) {
   const [settings, holidays] = await Promise.all([

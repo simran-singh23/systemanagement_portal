@@ -7,6 +7,9 @@ import { requireOrganizationPermission, requirePermission } from "@/lib/dal/auth
 import { boardMoveSchema, employeeTaskStatusSchema, taskSchema, type FormState } from "@/lib/validations";
 import { createNotification } from "@/lib/notifications";
 import { validBoardSnapshot } from "@/lib/task-board-move";
+import { parseTaskDate } from "@/lib/task-dates";
+import { assertActiveOrganizationAccess } from "@/lib/member-access";
+import { lockTransaction } from "@/lib/transaction-lock";
 
 export type BoardActionResult = { success: boolean; message?: string };
 
@@ -30,9 +33,22 @@ function parseTask(formData: FormData) {
   });
 }
 
-const toDate = (value?: string) => value ? new Date(value) : null;
+class TaskInputError extends Error {}
+
+async function taskDates(tx: Prisma.TransactionClient, organizationId: string, startDate?: string, dueDate?: string) {
+  const settings = await tx.organizationSettings.findUnique({ where: { organizationId }, select: { timezone: true } });
+  try {
+    const timezone = settings?.timezone ?? "Asia/Kolkata";
+    const startAt = parseTaskDate(startDate, timezone);
+    const dueAt = parseTaskDate(dueDate, timezone);
+    if (startAt && dueAt && dueAt < startAt) throw new Error("Due date must be after the start date.");
+    return { dates: { startAt, dueAt }, timezone };
+  } catch (error) { throw new TaskInputError(error instanceof Error ? error.message : "Check the task dates."); }
+}
+
 const taskPaths = () => {
   revalidatePath("/dashboard/tasks");
+  revalidatePath("/dashboard/tasks/board");
   revalidatePath("/employee/tasks");
   revalidatePath("/dashboard");
   revalidatePath("/employee");
@@ -43,6 +59,7 @@ function effectiveRole(userRole: UserRole, membership: { role: UserRole } | null
 }
 
 async function validateRelations(
+  client: Prisma.TransactionClient,
   organizationId: string,
   teamId: string | undefined,
   assignedToId: string | undefined,
@@ -50,19 +67,19 @@ async function validateRelations(
   actorRole: UserRole,
 ) {
   const [team, assignee] = await Promise.all([
-    teamId ? prisma.team.findFirst({ where: { id: teamId, organizationId }, select: { id: true, managerId: true } }) : null,
-    assignedToId ? prisma.organizationMember.findUnique({
+    teamId ? client.team.findFirst({ where: { id: teamId, organizationId }, select: { id: true, managerId: true } }) : null,
+    assignedToId ? client.organizationMember.findUnique({
       where: { organizationId_userId: { organizationId, userId: assignedToId } },
-      select: { userId: true, status: true },
+      select: { userId: true, status: true, user: { select: { status: true } } },
     }) : null,
   ]);
 
   if (teamId && !team) return "Selected team does not belong to this organization.";
   if (actorRole === "TEAM_LEAD" && (!team || team.managerId !== actorId)) return "Team leads can manage tasks only for the team they lead.";
-  if (assignedToId && (!assignee || assignee.status !== "ACTIVE")) return "Assign this task to an active organization member.";
+  if (assignedToId && (!assignee || assignee.status !== "ACTIVE" || assignee.user.status !== "ACTIVE")) return "Assign this task to an active organization member.";
 
   if (team && assignedToId) {
-    const member = await prisma.teamMember.findUnique({ where: { teamId_userId: { teamId: team.id, userId: assignedToId } }, select: { id: true } });
+    const member = await client.teamMember.findUnique({ where: { teamId_userId: { teamId: team.id, userId: assignedToId } }, select: { id: true } });
     if (!member) return "The selected employee must belong to the selected team.";
   }
   return null;
@@ -73,12 +90,13 @@ export async function createTask(_state: FormState, formData: FormData): Promise
   if (!parsed.success) return { errors: parsed.error.flatten().fieldErrors };
 
   const authorization = await requireOrganizationPermission(parsed.data.organizationId, "tasks:manage");
-  const role = effectiveRole(authorization.user.role, authorization.membership);
-  const relationError = await validateRelations(parsed.data.organizationId, parsed.data.teamId, parsed.data.assignedToId, authorization.user.id, role);
-  if (relationError) return { message: relationError };
-
   try {
     const task = await prisma.$transaction(async (tx) => {
+      await lockTransaction(tx, `task-board:${parsed.data.organizationId}`);
+      const role = await assertActiveOrganizationAccess(tx, parsed.data.organizationId, authorization.user.id, "tasks:manage");
+      const relationError = await validateRelations(tx, parsed.data.organizationId, parsed.data.teamId, parsed.data.assignedToId, authorization.user.id, role);
+      if (relationError) throw new TaskInputError(relationError);
+      const { dates } = await taskDates(tx, parsed.data.organizationId, parsed.data.startDate, parsed.data.dueDate);
       const lastPosition = await tx.task.aggregate({ where: { organizationId: parsed.data.organizationId, status: parsed.data.status, archivedAt: null }, _max: { position: true } });
       const created = await tx.task.create({
         data: {
@@ -89,8 +107,7 @@ export async function createTask(_state: FormState, formData: FormData): Promise
           teamId: parsed.data.teamId ?? null,
           priority: parsed.data.priority,
           status: parsed.data.status,
-          startAt: toDate(parsed.data.startDate),
-          dueAt: toDate(parsed.data.dueDate),
+          ...dates,
           estimatedMins: parsed.data.estimatedHours ? Math.round(parsed.data.estimatedHours * 60) : null,
           position: (lastPosition._max.position ?? -1) + 1,
           completedAt: parsed.data.status === "COMPLETED" ? new Date() : null,
@@ -107,7 +124,8 @@ export async function createTask(_state: FormState, formData: FormData): Promise
     });
     taskPaths();
     return { success: true, message: `“${task.title}” created successfully.` };
-  } catch {
+  } catch (error) {
+    if (error instanceof TaskInputError) return { message: error.message };
     return { message: "Task could not be created. Check the details and try again." };
   }
 }
@@ -120,19 +138,22 @@ export async function updateTask(taskId: string, _state: FormState, formData: Fo
   const role = effectiveRole(authorization.user.role, authorization.membership);
   const current = await prisma.task.findFirst({ where: { id: taskId, organizationId: parsed.data.organizationId, archivedAt: null }, select: { id: true, title: true, assignedToId: true, teamId: true, status: true, priority: true, dueAt: true, updatedAt: true } });
   if (!current) return { message: "Task was not found." };
+  if (field(formData, "expectedUpdatedAt") !== current.updatedAt.toISOString()) return { message: "The task changed while you were editing it. Refresh and try again." };
   if (role === "TEAM_LEAD") {
     const ownedTeam = await prisma.team.findFirst({ where: { id: current.teamId ?? "", organizationId: parsed.data.organizationId, managerId: authorization.user.id }, select: { id: true } });
     if (!ownedTeam) return { message: "You can update tasks only for the team you lead." };
   }
-  const relationError = await validateRelations(parsed.data.organizationId, parsed.data.teamId, parsed.data.assignedToId, authorization.user.id, role);
-  if (relationError) return { message: relationError };
-
   try {
     await prisma.$transaction(async (tx) => {
+      await lockTransaction(tx, `task-board:${parsed.data.organizationId}`);
       await lockTask(tx, taskId, parsed.data.organizationId);
-      const latest = await tx.task.findFirst({ where: { id: taskId, organizationId: parsed.data.organizationId, archivedAt: null }, select: { updatedAt: true } });
+      const currentRole = await assertActiveOrganizationAccess(tx, parsed.data.organizationId, authorization.user.id, "tasks:manage");
+      const latest = await tx.task.findFirst({ where: { id: taskId, organizationId: parsed.data.organizationId, archivedAt: null, ...(currentRole === "TEAM_LEAD" ? { team: { managerId: authorization.user.id } } : {}) }, select: { updatedAt: true } });
       if (!latest || latest.updatedAt.getTime() !== current.updatedAt.getTime()) throw new Error("TASK_STATE_CHANGED");
-      if (current.assignedToId !== (parsed.data.assignedToId ?? null) || current.status !== parsed.data.status) {
+      const relationError = await validateRelations(tx, parsed.data.organizationId, parsed.data.teamId, parsed.data.assignedToId, authorization.user.id, currentRole);
+      if (relationError) throw new TaskInputError(relationError);
+      const { dates, timezone } = await taskDates(tx, parsed.data.organizationId, parsed.data.startDate, parsed.data.dueDate);
+      if (current.assignedToId !== (parsed.data.assignedToId ?? null) || current.status !== parsed.data.status || current.teamId !== (parsed.data.teamId ?? null)) {
         const activeTimer = await tx.workSession.findFirst({ where: { taskId, endedAt: null }, select: { id: true } });
         if (activeTimer) throw new Error("TASK_TIMER_ACTIVE");
       }
@@ -148,8 +169,7 @@ export async function updateTask(taskId: string, _state: FormState, formData: Fo
           teamId: parsed.data.teamId ?? null,
           priority: parsed.data.priority,
           status: parsed.data.status,
-          startAt: toDate(parsed.data.startDate),
-          dueAt: toDate(parsed.data.dueDate),
+          ...dates,
           estimatedMins: parsed.data.estimatedHours ? Math.round(parsed.data.estimatedHours * 60) : null,
           position: lastPosition ? (lastPosition._max.position ?? -1) + 1 : undefined,
           completedAt: parsed.data.status === "COMPLETED" ? current.status === "COMPLETED" ? undefined : new Date() : null,
@@ -161,33 +181,39 @@ export async function updateTask(taskId: string, _state: FormState, formData: Fo
       const version = current.updatedAt.toISOString();
       if (task.assignedToId && task.assignedToId !== current.assignedToId) await createNotification(tx, { organizationId: task.organizationId, userId: task.assignedToId, actorId: authorization.user.id, type: "TASK_ASSIGNED", title: "Task assigned to you", message: task.title, link: `/employee/tasks?task=${task.id}`, relatedEntityType: "task", relatedEntityId: task.id, eventId: `task.reassigned:${task.id}:${version}:${task.assignedToId}`, metadata: { taskId: task.id } });
       if (task.assignedToId && task.assignedToId !== authorization.user.id && task.priority !== current.priority) await createNotification(tx, { organizationId: task.organizationId, userId: task.assignedToId, actorId: authorization.user.id, type: "TASK_UPDATED", title: "Task priority changed", message: `${task.title} is now ${task.priority.toLowerCase()} priority.`, link: `/employee/tasks?task=${task.id}`, relatedEntityType: "task", relatedEntityId: task.id, eventId: `task.priority:${task.id}:${version}:${task.priority}`, metadata: { taskId: task.id, priority: task.priority } });
-      if (task.assignedToId && task.assignedToId !== authorization.user.id && task.dueAt?.toISOString() !== current.dueAt?.toISOString()) await createNotification(tx, { organizationId: task.organizationId, userId: task.assignedToId, actorId: authorization.user.id, type: "TASK_UPDATED", title: "Task deadline updated", message: task.dueAt ? `${task.title} is due ${task.dueAt.toLocaleDateString("en-IN")}.` : `${task.title} no longer has a deadline.`, link: `/employee/tasks?task=${task.id}`, relatedEntityType: "task", relatedEntityId: task.id, eventId: `task.deadline:${task.id}:${version}:${task.dueAt?.toISOString() ?? "none"}`, metadata: { taskId: task.id, dueAt: task.dueAt?.toISOString() ?? null } });
+      if (task.assignedToId && task.assignedToId !== authorization.user.id && task.dueAt?.toISOString() !== current.dueAt?.toISOString()) await createNotification(tx, { organizationId: task.organizationId, userId: task.assignedToId, actorId: authorization.user.id, type: "TASK_UPDATED", title: "Task deadline updated", message: task.dueAt ? `${task.title} is due ${task.dueAt.toLocaleDateString("en-IN", { timeZone: timezone })}.` : `${task.title} no longer has a deadline.`, link: `/employee/tasks?task=${task.id}`, relatedEntityType: "task", relatedEntityId: task.id, eventId: `task.deadline:${task.id}:${version}:${task.dueAt?.toISOString() ?? "none"}`, metadata: { taskId: task.id, dueAt: task.dueAt?.toISOString() ?? null } });
       if (task.assignedToId && task.assignedToId !== authorization.user.id && task.status !== current.status) await createNotification(tx, { organizationId: task.organizationId, userId: task.assignedToId, actorId: authorization.user.id, type: "TASK_UPDATED", title: task.status === "COMPLETED" ? "Task completed" : task.status === "REVIEW" ? "Task moved to review" : "Task status changed", message: `${task.title} moved to ${task.status.replaceAll("_", " ").toLowerCase()}.`, link: `/employee/tasks?task=${task.id}`, relatedEntityType: "task", relatedEntityId: task.id, eventId: `task.status:${task.id}:${version}:${task.status}`, metadata: { taskId: task.id, status: task.status } });
     });
     taskPaths();
     return { success: true, message: "Task changes saved." };
   } catch (error) {
+    if (error instanceof TaskInputError) return { message: error.message };
     if (error instanceof Error && error.message === "TASK_TIMER_ACTIVE") return { message: "Pause the running task timer before changing this task's assignment or status." };
     return { message: "The task changed while you were editing it. Refresh and try again." };
   }
 }
 
-export async function archiveTask(organizationId: string, taskId: string): Promise<void> {
+export async function archiveTask(organizationId: string, taskId: string): Promise<FormState> {
   const authorization = await requireOrganizationPermission(organizationId, "tasks:manage");
   const role = effectiveRole(authorization.user.role, authorization.membership);
-  if (role !== "SUPER_ADMIN" && role !== "PRODUCT_MANAGER") throw new Error("Only product managers and administrators can archive tasks.");
+  if (role !== "SUPER_ADMIN" && role !== "PRODUCT_MANAGER") return { message: "Only product managers and administrators can archive tasks." };
   const task = await prisma.task.findFirst({ where: { id: taskId, organizationId, archivedAt: null }, select: { id: true, title: true } });
-  if (!task) throw new Error("Task was not found.");
-
+  if (!task) return { message: "Task was not found." };
+  try {
   await prisma.$transaction(async (tx) => {
+    await lockTransaction(tx, `task-board:${organizationId}`);
     await lockTask(tx, task.id, organizationId);
+    const currentRole = await assertActiveOrganizationAccess(tx, organizationId, authorization.user.id, "tasks:manage");
+    if (currentRole !== "SUPER_ADMIN" && currentRole !== "PRODUCT_MANAGER") throw new Error("TASK_STATE_CHANGED");
     const activeTimer = await tx.workSession.findFirst({ where: { taskId: task.id, endedAt: null }, select: { id: true } });
-    if (activeTimer) throw new Error("Pause the running task timer before archiving this task.");
+    if (activeTimer) throw new TaskInputError("Pause the running task timer before archiving this task.");
     const archived = await tx.task.updateMany({ where: { id: task.id, organizationId, archivedAt: null }, data: { archivedAt: new Date() } });
     if (archived.count !== 1) throw new Error("Task changed while archiving. Refresh and try again.");
     await tx.activityLog.create({ data: { organizationId, actorId: authorization.user.id, action: "task.archived", entityType: "task", entityId: task.id, metadata: { title: task.title } } });
   });
+  } catch (error) { return { message: error instanceof TaskInputError ? error.message : "Task changed while archiving. Refresh and try again." }; }
   taskPaths();
+  return { success: true, message: "Task archived." };
 }
 
 export async function updateMyTaskStatus(_state: FormState, formData: FormData): Promise<FormState> {
@@ -212,7 +238,9 @@ export async function updateMyTaskStatus(_state: FormState, formData: FormData):
 
   try {
   await prisma.$transaction(async (tx) => {
+    await lockTransaction(tx, `task-board:${task.organizationId}`);
     await lockTask(tx, task.id, task.organizationId);
+    await assertActiveOrganizationAccess(tx, task.organizationId, user.id, "tasks:update-own");
     const latest = await tx.task.findFirst({ where: { id: task.id, organizationId: task.organizationId, assignedToId: user.id, archivedAt: null }, select: { status: true, updatedAt: true } });
     if (!latest || latest.status !== task.status || latest.updatedAt.getTime() !== task.updatedAt.getTime()) throw new Error("TASK_STATE_CHANGED");
     if (parsed.data.status !== "IN_PROGRESS") {
@@ -262,9 +290,13 @@ export async function moveTaskOnBoard(input: unknown): Promise<BoardActionResult
 
   try {
     await prisma.$transaction(async (tx) => {
+      await lockTransaction(tx, `task-board:${task.organizationId}`);
       await lockTask(tx, task.id, task.organizationId);
+      const currentRole = await assertActiveOrganizationAccess(tx, task.organizationId, authorization.user.id, "tasks:manage");
+      const latest = await tx.task.findUnique({ where: { id: task.id }, select: { updatedAt: true } });
+      if (!latest || latest.updatedAt.getTime() !== task.updatedAt.getTime()) throw new Error("BOARD_SNAPSHOT_CHANGED");
       const scopedTasks = await tx.task.findMany({
-        where: { organizationId: task.organizationId, archivedAt: null, status: { in: parsed.data.columns.map((column) => column.status) }, ...(role === "TEAM_LEAD" ? { team: { managerId: authorization.user.id } } : {}) },
+        where: { organizationId: task.organizationId, archivedAt: null, status: { in: parsed.data.columns.map((column) => column.status) }, ...(currentRole === "TEAM_LEAD" ? { team: { managerId: authorization.user.id } } : {}) },
         select: { id: true, status: true },
       });
       if (!validBoardSnapshot(parsed.data, scopedTasks)) throw new Error("BOARD_SNAPSHOT_CHANGED");

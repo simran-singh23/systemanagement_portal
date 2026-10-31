@@ -57,7 +57,7 @@ async function expectedUsers(tx: Prisma.TransactionClient, organizationId: strin
   if (!settings.workDays.includes(date.getUTCDay())) return { eligible: false, reason: "non_working_day", userIds: [] as string[], leaveIds: [] as string[] };
   const [holiday, members] = await Promise.all([
     tx.organizationHoliday.findUnique({ where: { organizationId_holidayDate: { organizationId, holidayDate: date } }, select: { id: true } }),
-    tx.organizationMember.findMany({ where: { organizationId, status: "ACTIVE", role: { in: ["TEAM_LEAD", "EMPLOYEE"] } }, select: { userId: true } }),
+    tx.organizationMember.findMany({ where: { organizationId, status: "ACTIVE", user: { status: "ACTIVE" }, role: { in: ["TEAM_LEAD", "EMPLOYEE"] } }, select: { userId: true } }),
   ]);
   const memberIds = members.map((item) => item.userId);
   const leaves = memberIds.length ? await tx.leaveRequest.findMany({ where: { organizationId, userId: { in: memberIds }, status: "APPROVED", startDate: { lte: date }, endDate: { gte: date } }, select: { userId: true } }) : [];

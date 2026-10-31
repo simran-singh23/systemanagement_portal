@@ -12,6 +12,7 @@ type EmployeeOption = { id: string; name: string; email: string; teamIds: string
 type TeamOption = { id: string; name: string };
 export type TaskFormInitial = {
   id: string;
+  updatedAt: string;
   title: string;
   description: string;
   assignedToId: string;
@@ -26,7 +27,7 @@ export type TaskFormInitial = {
 const inputClass = "mt-2 h-11 w-full rounded-xl border border-[#dfe4eb] bg-white px-3.5 text-sm text-[#253047] outline-none transition focus:border-[#80a7f5] focus:ring-4 focus:ring-[#eef4ff]";
 const initialState: FormState = {};
 
-export function TaskDrawer({ organizationId, employees, teams, initial }: { organizationId: string; employees: EmployeeOption[]; teams: TeamOption[]; initial?: TaskFormInitial }) {
+export function TaskDrawer({ organizationId, employees, teams, initial, timezone }: { organizationId: string; employees: EmployeeOption[]; teams: TeamOption[]; initial?: TaskFormInitial; timezone: string }) {
   const action = initial ? updateTask.bind(null, initial.id) : createTask;
   const [state, formAction] = useActionState(action, initialState);
   const [teamId, setTeamId] = useState(initial?.teamId || "");
@@ -39,7 +40,9 @@ export function TaskDrawer({ organizationId, employees, teams, initial }: { orga
         <header className="flex items-start justify-between border-b border-[#e6eaf0] bg-white px-5 py-5 sm:px-7"><div><p className="text-xs font-semibold text-[#2563eb]">{initial ? "Edit work item" : "New work item"}</p><h2 id="task-form-title" className="mt-1 text-2xl font-semibold tracking-[-0.04em] text-[#172033]">{initial ? "Update task" : "Create task"}</h2><p className="mt-1 text-sm text-[#7c8799]">Set ownership, timing, and a clear delivery state.</p></div><Link href="/dashboard/tasks" aria-label="Close" className="grid size-10 place-items-center rounded-xl border border-[#e3e8ef] text-[#667085] hover:bg-[#f5f7fa]"><Icon name="x" className="size-4" /></Link></header>
         <form action={formAction} className="flex min-h-0 flex-1 flex-col">
           <input type="hidden" name="organizationId" value={organizationId} />
+          {initial ? <input type="hidden" name="expectedUpdatedAt" value={initial.updatedAt} /> : null}
           <div className="flex-1 space-y-6 overflow-y-auto p-5 sm:p-7">
+            <p className="text-xs text-[#667085]">Task dates use {timezone.replaceAll("_", " ")}.</p>
             {(state.message || state.success) && <p role="status" className={`rounded-xl border px-4 py-3 text-sm ${state.success ? "border-[#b9e7d2] bg-[#effaf5] text-[#147252]" : "border-[#f2c6c1] bg-[#fff5f4] text-[#a83931]"}`}>{state.message}</p>}
             <label className="block text-sm font-medium text-[#344054]">Task title<input name="title" required defaultValue={initial?.title} placeholder="e.g. Review onboarding handoff" className={inputClass} />{state.errors?.title && <span className="mt-1.5 block text-xs text-[#b42318]">{state.errors.title[0]}</span>}</label>
             <label className="block text-sm font-medium text-[#344054]">Description<textarea name="description" rows={5} defaultValue={initial?.description} placeholder="Add context, acceptance criteria, or useful links." className="mt-2 w-full resize-y rounded-xl border border-[#dfe4eb] bg-white px-3.5 py-3 text-sm text-[#253047] outline-none focus:border-[#80a7f5] focus:ring-4 focus:ring-[#eef4ff]" /></label>
@@ -48,7 +51,7 @@ export function TaskDrawer({ organizationId, employees, teams, initial }: { orga
               <label className="text-sm font-medium text-[#344054]">Assigned employee<select name="assignedToId" defaultValue={initial?.assignedToId || ""} className={inputClass}><option value="">Unassigned</option>{availableEmployees.map((employee) => <option key={employee.id} value={employee.id}>{employee.name} · {employee.email}</option>)}</select></label>
               <label className="text-sm font-medium text-[#344054]">Priority<select name="priority" defaultValue={initial?.priority || "MEDIUM"} className={inputClass}><option value="LOW">Low</option><option value="MEDIUM">Medium</option><option value="HIGH">High</option><option value="URGENT">Urgent</option></select></label>
               <label className="text-sm font-medium text-[#344054]">Status<select name="status" defaultValue={initial?.status || "TODO"} className={inputClass}><option value="TODO">To do</option><option value="IN_PROGRESS">In progress</option><option value="BLOCKED">Blocked</option><option value="REVIEW">In review</option><option value="COMPLETED">Completed</option></select></label>
-              <label className="text-sm font-medium text-[#344054]">Start date<input name="startDate" type="datetime-local" defaultValue={initial?.startDate} className={inputClass} /></label>
+              <label className="text-sm font-medium text-[#344054]">Start date<input name="startDate" type="datetime-local" defaultValue={initial?.startDate} className={inputClass} />{state.errors?.startDate ? <span className="mt-1.5 block text-xs text-[#b42318]">{state.errors.startDate[0]}</span> : null}</label>
               <label className="text-sm font-medium text-[#344054]">Due date<input name="dueDate" type="datetime-local" defaultValue={initial?.dueDate} className={inputClass} />{state.errors?.dueDate && <span className="mt-1.5 block text-xs text-[#b42318]">{state.errors.dueDate[0]}</span>}</label>
               <label className="text-sm font-medium text-[#344054]">Estimated hours<input name="estimatedHours" type="number" min="0.25" step="0.25" defaultValue={initial?.estimatedHours} placeholder="2.5" className={inputClass} />{state.errors?.estimatedHours && <span className="mt-1.5 block text-xs text-[#b42318]">{state.errors.estimatedHours[0]}</span>}</label>
             </div>

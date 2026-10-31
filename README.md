@@ -2,7 +2,22 @@
 
 TeamFlow is a Next.js team operations portal with PostgreSQL, Prisma ORM, Google OAuth through Auth.js, and server-side role-based authorization.
 
+For the next development batches, start with [the intern handoff and pending-work checklist](PENDING_WORK.md).
+
 ## Local setup
+
+For a Mac with Node.js 20.9+ and a running local PostgreSQL server:
+
+```bash
+npm run setup:local
+npm run dev
+```
+
+The setup command keeps existing environment files, creates dedicated local development and test databases if needed, migrates both, and seeds development data. On a fresh checkout it creates `.env.local` with a random `SEED_DEV_PASSWORD`. Use that password with `admin@teamflow.dev`, `manager@teamflow.dev`, `lead@teamflow.dev`, or `employee@teamflow.dev`.
+
+Existing configuration must supply local `DATABASE_URL`/`DIRECT_URL` pointing to the same `teamflow_dev` database (an underscore suffix is allowed), and `TEST_DATABASE_URL` pointing to a separate `teamflow_test` database. The setup command refuses remote or unrelated targets. It does not reset databases. See [local backend setup and verification](docs/LOCAL_BACKEND_SETUP.md), especially if migrations were previously applied.
+
+For manual setup:
 
 1. Install dependencies:
 
@@ -13,9 +28,12 @@ TeamFlow is a Next.js team operations portal with PostgreSQL, Prisma ORM, Google
 2. Copy `.env.example` to `.env.local` and configure:
 
    - `DATABASE_URL`: PostgreSQL connection string.
+   - `DIRECT_URL`: direct connection to the same database for migrations.
+   - `TEST_DATABASE_URL`: separate local test database for backend verification.
    - `AUTH_SECRET`: random 32-byte secret.
    - `AUTH_GOOGLE_ID` and `AUTH_GOOGLE_SECRET`: Google OAuth credentials.
-- `RESEND_API_KEY` and `RESEND_FROM_EMAIL`: verified Resend sender used for password setup and reset links (along with `AUTH_URL`).
+   - `RESEND_API_KEY` and `RESEND_FROM_EMAIL`: verified Resend sender used for password setup and reset links (along with `AUTH_URL`). In local development without Resend, setup/reset links print in the dev server terminal.
+   - `SEED_DEV_PASSWORD`: optional password of 12–128 characters for the seeded demo users. This enables local password login without Google or Resend.
 
 3. In Google Cloud Console, add this authorized redirect URI:
 

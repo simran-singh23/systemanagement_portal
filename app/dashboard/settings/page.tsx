@@ -4,6 +4,7 @@ import { requireCurrentOrganization } from "@/lib/dal/auth";
 import { ORGANIZATION_SETTINGS_DEFAULTS } from "@/lib/organization-settings";
 import { prisma } from "@/lib/prisma";
 import { emailSenderConfigured } from "@/lib/email/delivery";
+import { reportRecipientWhere } from "@/lib/email/recipients";
 
 export const metadata: Metadata = { title: "Organization Settings" };
 export const dynamic = "force-dynamic";
@@ -18,7 +19,7 @@ export default async function SettingsPage({ searchParams }: { searchParams: Pro
     prisma.organizationSettings.findUnique({ where: { organizationId: organization.id } }),
     prisma.organizationHoliday.findMany({ where: { organizationId: organization.id }, orderBy: { holidayDate: "asc" } }),
     prisma.user.findMany({
-      where: { status: "ACTIVE", emailVerified: { not: null }, OR: [{ ownedOrganizations: { some: { id: organization.id } }, role: "SUPER_ADMIN" }, { organizationMembers: { some: { organizationId: organization.id, status: "ACTIVE", role: { in: ["SUPER_ADMIN", "PRODUCT_MANAGER"] } } } }] },
+      where: reportRecipientWhere(organization.id),
       select: { id: true, name: true, email: true, role: true },
       orderBy: { name: "asc" },
     }),

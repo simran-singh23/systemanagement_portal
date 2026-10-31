@@ -71,7 +71,7 @@ export default async function Login({
 
           <LoginForm />
 
-          <div className="my-6 flex items-center gap-3 text-[11px] font-medium uppercase tracking-[0.12em] text-[#98a2b3]"><span className="h-px flex-1 bg-[#e5eaf1]" />Or continue with<span className="h-px flex-1 bg-[#e5eaf1]" /></div>
+          <div className="my-6 flex items-center gap-3 text-[11px] font-medium uppercase tracking-[0.12em] text-[#667085]"><span className="h-px flex-1 bg-[#e5eaf1]" />Or continue with<span className="h-px flex-1 bg-[#e5eaf1]" /></div>
 
           <form action={loginWithGoogle}>
             <GoogleSubmitButton />

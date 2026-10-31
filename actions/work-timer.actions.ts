@@ -9,10 +9,11 @@ import { durationMinutes } from "@/lib/date-time";
 import { workingSummary } from "@/lib/work-time";
 import { createNotification } from "@/lib/notifications";
 import { assertActiveOrganizationAccess } from "@/lib/member-access";
+import { lockTransaction as lockUser } from "@/lib/transaction-lock";
+import { lockTransaction } from "@/lib/transaction-lock";
 
 const field = (formData: FormData, name: string) => String(formData.get(name) ?? "");
 const parseTimer = (formData: FormData) => taskTimerSchema.safeParse({ organizationId: field(formData, "organizationId"), taskId: field(formData, "taskId") });
-async function lockUser(tx: Prisma.TransactionClient, userId: string) { await tx.$queryRaw`SELECT pg_advisory_xact_lock(hashtextextended(${userId}, 0))`; }
 async function lockTask(tx: Prisma.TransactionClient, taskId: string, organizationId: string) { await tx.$queryRaw`SELECT "id" FROM "tasks" WHERE "id" = ${taskId} AND "organization_id" = ${organizationId} FOR UPDATE`; }
 
 function refreshTimeData() {
@@ -52,6 +53,7 @@ async function beginTimer(formData: FormData, event: "started" | "resumed"): Pro
     await prisma.$transaction(async (tx) => {
       await lockUser(tx, context.authorization.user.id);
       await assertActiveOrganizationAccess(tx, parsed.data.organizationId, context.authorization.user.id, "tasks:update-own");
+      await lockTransaction(tx, `task-board:${parsed.data.organizationId}`);
       await lockTask(tx, context.task!.id, parsed.data.organizationId);
       const latestTask = await tx.task.findFirst({ where: { id: context.task!.id, organizationId: parsed.data.organizationId, assignedToId: context.authorization.user.id, archivedAt: null }, select: { status: true, workSessions: { where: { userId: context.authorization.user.id }, select: { id: true }, take: 1 } } });
       if (!latestTask || latestTask.status === "COMPLETED" || latestTask.status === "CANCELLED" || (event === "started" ? latestTask.workSessions.length > 0 : latestTask.workSessions.length === 0)) throw new Error("TIMER_STATE_CHANGED");
@@ -62,7 +64,10 @@ async function beginTimer(formData: FormData, event: "started" | "resumed"): Pro
       ]);
       if (!lockedOffice || lockedBreak || lockedTask) throw new Error("TIMER_STATE_CHANGED");
       await tx.workSession.create({ data: { organizationId: parsed.data.organizationId, attendanceId: lockedOffice.attendanceId, userId: context.authorization.user.id, taskId: context.task!.id, startedAt: now } });
-      if (context.task!.status !== "IN_PROGRESS") await tx.task.update({ where: { id: context.task!.id }, data: { status: "IN_PROGRESS", completedAt: null } });
+      if (latestTask.status !== "IN_PROGRESS") {
+        const last = await tx.task.aggregate({ where: { organizationId: parsed.data.organizationId, archivedAt: null, status: "IN_PROGRESS" }, _max: { position: true } });
+        await tx.task.update({ where: { id: context.task!.id }, data: { status: "IN_PROGRESS", completedAt: null, position: (last._max.position ?? -1) + 1 } });
+      }
       await tx.activityLog.create({ data: { organizationId: parsed.data.organizationId, actorId: context.authorization.user.id, action: `task.timer_${event}`, entityType: "task", entityId: context.task!.id, metadata: { source: "web" } } });
     });
   } catch {
@@ -88,11 +93,15 @@ async function closeTimer(formData: FormData, finish: boolean): Promise<FormStat
     await prisma.$transaction(async (tx) => {
       await lockUser(tx, authorization.user.id);
       await assertActiveOrganizationAccess(tx, parsed.data.organizationId, authorization.user.id, "tasks:update-own");
+      await lockTransaction(tx, `task-board:${parsed.data.organizationId}`);
       await lockTask(tx, task.id, parsed.data.organizationId);
       const locked = await tx.workSession.findFirst({ where: { id: active.id, endedAt: null }, select: { id: true, startedAt: true } });
       if (!locked) throw new Error("TIMER_STATE_CHANGED");
       await tx.workSession.update({ where: { id: locked.id }, data: { endedAt: now, durationMins: durationMinutes(locked.startedAt, now) } });
-      if (finish) await tx.task.update({ where: { id: task.id }, data: { status: "COMPLETED", completedAt: now } });
+      if (finish) {
+        const last = await tx.task.aggregate({ where: { organizationId: parsed.data.organizationId, archivedAt: null, status: "COMPLETED" }, _max: { position: true } });
+        await tx.task.update({ where: { id: task.id }, data: { status: "COMPLETED", completedAt: now, position: (last._max.position ?? -1) + 1 } });
+      }
       await tx.activityLog.create({ data: { organizationId: parsed.data.organizationId, actorId: authorization.user.id, action: finish ? "task.timer_stopped" : "task.timer_paused", entityType: "task", entityId: task.id, metadata: { durationMins: durationMinutes(locked.startedAt, now), source: "web" } } });
       if (finish && task.createdById !== authorization.user.id) await createNotification(tx, { organizationId: parsed.data.organizationId, userId: task.createdById, actorId: authorization.user.id, type: "TASK_UPDATED", title: "Task completed", message: task.title, link: `/dashboard/tasks?task=${task.id}`, relatedEntityType: "task", relatedEntityId: task.id, eventId: `task.timer-completed:${task.id}:${locked.id}`, metadata: { taskId: task.id, status: "COMPLETED" } });
     });

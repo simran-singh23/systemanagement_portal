@@ -6,11 +6,9 @@ const globalForPrisma = globalThis as unknown as {
 };
 
 function databaseUrl() {
-  if (process.env.DATABASE_URL) return process.env.DATABASE_URL;
-  if (process.env.NODE_ENV === "production") {
-    throw new Error("DATABASE_URL is required in production.");
-  }
-  return "postgresql://postgres:postgres@127.0.0.1:5432/teamflow?schema=public";
+  const value = process.env.DATABASE_URL?.trim();
+  if (!value) throw new Error("DATABASE_URL is required. Configure .env.local or run npm run setup:local.");
+  return value;
 }
 
 const connectionString = databaseUrl();

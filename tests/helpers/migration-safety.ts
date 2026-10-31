@@ -59,10 +59,14 @@ export function validateMigrationTestDatabaseUrl(value: string): SafeMigrationDa
   return { host, port, database, schema: "public" };
 }
 
-export interface CatalogDefinition {
+export interface CatalogObjectState {
   definition: string;
   validated?: boolean;
   valid?: boolean;
+}
+
+export interface CatalogDefinition extends CatalogObjectState {
+  name?: string;
   table?: string;
   columns?: string[];
 }
@@ -91,7 +95,7 @@ export interface CatalogIndexSignature {
   predicate: string | null;
 }
 
-export interface CatalogIndex extends CatalogDefinition, CatalogIndexSignature {}
+export interface CatalogIndex extends CatalogObjectState, CatalogIndexSignature {}
 
 export interface CatalogForeignKeySignature {
   table: string;
@@ -102,7 +106,7 @@ export interface CatalogForeignKeySignature {
   onUpdate: string;
 }
 
-export interface CatalogForeignKey extends CatalogDefinition, CatalogForeignKeySignature {}
+export interface CatalogForeignKey extends CatalogObjectState, CatalogForeignKeySignature {}
 
 export interface MigrationCatalogSnapshot {
   enums: Record<string, string[]>;
@@ -284,7 +288,7 @@ export function verifyMigrationCatalog(
   const verifyDefinitions = (
     category: "constraint" | "index" | "foreign_key",
     required: Record<string, string> | undefined,
-    found: Record<string, CatalogDefinition>,
+    found: Record<string, CatalogObjectState>,
   ) => {
     for (const [name, definition] of Object.entries(required ?? {})) {
       const object = found[name];

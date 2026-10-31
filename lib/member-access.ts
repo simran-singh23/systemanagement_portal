@@ -1,5 +1,5 @@
 import type { Prisma, UserRole, UserStatus } from "@prisma/client";
-import { hasOrganizationPermission, type Permission } from "@/lib/permissions";
+import { hasOrganizationPermission, organizationRoleForAccess, type Permission } from "@/lib/permissions";
 
 type MembershipAccess = { role: UserRole; status: "ACTIVE" | "INVITED" | "SUSPENDED" };
 
@@ -38,4 +38,5 @@ export async function assertActiveOrganizationAccess(tx: Prisma.TransactionClien
     tx.user.findUnique({ where: { id: userId }, select: { role: true, status: true } }),
   ]);
   if (!organization || !user || user.status !== "ACTIVE" || !hasOrganizationPermission({ actorId: userId, globalRole: user.role, ownerId: organization.ownerId, membershipRole: membership?.role ?? null, membershipStatus: membership?.status ?? null }, permission)) throw new Error("ORGANIZATION_ACCESS_REVOKED");
+  return organizationRoleForAccess({ actorId: userId, globalRole: user.role, ownerId: organization.ownerId, membershipRole: membership?.role ?? null, membershipStatus: membership?.status ?? null })!;
 }

@@ -42,7 +42,7 @@ export function isOverdue(dueAt: Date | string | null, status: TaskStatus) {
   return Boolean(dueAt && status !== "COMPLETED" && status !== "CANCELLED" && new Date(dueAt) < new Date());
 }
 
-export function formatTaskDate(value: Date | string | null) {
+export function formatTaskDate(value: Date | string | null, timeZone = "Asia/Kolkata") {
   if (!value) return "No deadline";
-  return new Intl.DateTimeFormat("en-IN", { day: "numeric", month: "short", year: "numeric" }).format(new Date(value));
+  return new Intl.DateTimeFormat("en-IN", { timeZone, day: "numeric", month: "short", year: "numeric" }).format(new Date(value));
 }

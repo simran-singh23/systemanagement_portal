@@ -68,11 +68,15 @@ function escapeHtml(value: string) {
   return value.replace(/[&<>"']/g, (character) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" })[character]!);
 }
 
-async function sendPasswordLink(email: string, token: string, purpose: PasswordTokenPurpose) {
-  const origin = configuredOrigin();
+function passwordLink(token: string, purpose: PasswordTokenPurpose) {
   const path = purpose === "INITIAL_SETUP" ? "/set-password" : "/reset-password";
-  const link = new URL(path, origin);
+  const link = new URL(path, configuredOrigin());
   link.searchParams.set("token", token);
+  return link;
+}
+
+async function sendPasswordLink(email: string, token: string, purpose: PasswordTokenPurpose) {
+  const link = passwordLink(token, purpose);
   const action = purpose === "INITIAL_SETUP" ? "Set up your TeamFlow password" : "Reset your TeamFlow password";
   const resend = new Resend(process.env.RESEND_API_KEY);
   const response = await resend.emails.send({
@@ -85,10 +89,18 @@ async function sendPasswordLink(email: string, token: string, purpose: PasswordT
   if (response.error) throw new Error("Password email could not be delivered.");
 }
 
-export async function sendPasswordSetupOrReset(email: string): Promise<"sent" | "not_configured" | "not_eligible" | "test_recipient_not_allowlisted"> {
+export async function sendPasswordSetupOrReset(email: string): Promise<"sent" | "logged" | "not_configured" | "not_eligible" | "test_recipient_not_allowlisted"> {
   const user = await prisma.user.findUnique({ where: { email: email.toLowerCase() }, select: { id: true, email: true, passwordHash: true, status: true } });
   if (!user || user.status === "SUSPENDED") return "not_eligible";
-  if (!authEmailConfigured()) return "not_configured";
+  if (!authEmailConfigured()) {
+    // Local development without Resend: print the one-time link to the dev server terminal instead of emailing it.
+    if (process.env.NODE_ENV !== "development" || !process.env.AUTH_URL?.trim()) return "not_configured";
+    const purpose: PasswordTokenPurpose = user.passwordHash ? "PASSWORD_RESET" : "INITIAL_SETUP";
+    const token = await createPasswordToken(user.id, purpose);
+    await recordAuthSecurityEvent({ event: purpose === "INITIAL_SETUP" ? "password_setup_requested" : "password_reset_requested", userId: user.id, email: user.email });
+    console.info(`[dev] Password ${purpose === "INITIAL_SETUP" ? "setup" : "reset"} link for ${user.email} (valid 30 minutes): ${passwordLink(token, purpose).toString()}`);
+    return "logged";
+  }
   if (!maySendAuthEmailTo(user.email)) return "test_recipient_not_allowlisted";
   const purpose: PasswordTokenPurpose = user.passwordHash ? "PASSWORD_RESET" : "INITIAL_SETUP";
   const token = await createPasswordToken(user.id, purpose);

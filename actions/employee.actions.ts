@@ -8,6 +8,7 @@ import { requireOrganizationPermission } from "@/lib/dal/auth";
 import { reconcileAccountAccess } from "@/lib/member-access";
 import { durationMinutes } from "@/lib/date-time";
 import { sendPasswordSetupOrReset } from "@/lib/password-account";
+import { lockTransaction } from "@/lib/transaction-lock";
 import {
   employeeSchema,
   employeeUpdateSchema,
@@ -17,7 +18,7 @@ import {
 const field = (formData: FormData, name: string) => String(formData.get(name) ?? "");
 
 async function closeDeactivatedMemberSessions(tx: Prisma.TransactionClient, organizationId: string, userId: string) {
-  await tx.$queryRaw`SELECT pg_advisory_xact_lock(hashtextextended(${userId}, 0))`;
+  await lockTransaction(tx, userId);
   const now = new Date();
   const sessions = await tx.workSession.findMany({ where: { organizationId, userId, endedAt: null }, select: { id: true, attendanceId: true, startedAt: true } });
   const activeBreaks = await tx.break.findMany({ where: { organizationId, userId, endedAt: null }, select: { id: true, startedAt: true } });
@@ -148,7 +149,7 @@ export async function createEmployee(
   if (employee.needsPasswordSetup) {
     try {
       const result = await sendPasswordSetupOrReset(employee.email);
-      if (result !== "sent" && result !== "not_eligible") console.warn(`Employee password setup email not sent (${result}). Configure the auth mailer and local test recipient allowlist if applicable.`);
+      if (result !== "sent" && result !== "logged" && result !== "not_eligible") console.warn(`Employee password setup email not sent (${result}). Configure the auth mailer and local test recipient allowlist if applicable.`);
     }
     catch (error) { console.error("Employee password setup email could not be sent.", error instanceof Error ? error.message : "unknown error"); }
   }

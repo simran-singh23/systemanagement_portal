@@ -18,8 +18,8 @@ export async function buildDailyEmailReport(organizationId: string, workDate: st
   if (!organization || !settings || !summary) return null;
   const range = workdayRangeUtc(workDate, settings.timezone, settings.workdayStart, settings.workdayEnd);
   const [members, attendance, reports, tasks] = await Promise.all([
-    prisma.organizationMember.findMany({ where: { organizationId, status: "ACTIVE", role: { in: ["EMPLOYEE", "TEAM_LEAD"] } }, select: { userId: true, user: { select: { name: true, email: true } } }, orderBy: { user: { name: "asc" } } }),
-    prisma.attendance.findMany({ where: { organizationId, attendanceDate: date, user: { organizationMembers: { some: { organizationId, status: "ACTIVE", role: { in: ["EMPLOYEE", "TEAM_LEAD"] } } } } }, include: { breaks: true, workSessions: { where: { taskId: { not: null } } } } }),
+    prisma.organizationMember.findMany({ where: { organizationId, status: "ACTIVE", user: { status: "ACTIVE" }, role: { in: ["EMPLOYEE", "TEAM_LEAD"] } }, select: { userId: true, user: { select: { name: true, email: true } } }, orderBy: { user: { name: "asc" } } }),
+    prisma.attendance.findMany({ where: { organizationId, attendanceDate: date, user: { status: "ACTIVE", organizationMembers: { some: { organizationId, status: "ACTIVE", role: { in: ["EMPLOYEE", "TEAM_LEAD"] } } } } }, include: { breaks: true, workSessions: { where: { taskId: { not: null } } } } }),
     prisma.dailyReport.findMany({ where: { organizationId, reportDate: date, status: { in: ["SUBMITTED", "REVIEWED"] } }, select: { userId: true, summary: true, blockers: true, pulse: { select: { mood: true, note: true } } } }),
     prisma.task.findMany({ where: { organizationId, archivedAt: null, assignedToId: { not: null }, OR: [{ completedAt: { gte: range.start, lt: range.end } }, { status: "IN_PROGRESS" }] }, select: { assignedToId: true, status: true, completedAt: true } }),
   ]);

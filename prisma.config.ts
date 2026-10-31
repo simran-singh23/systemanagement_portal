@@ -1,4 +1,4 @@
-import "dotenv/config";
+import "./env.config";
 import { defineConfig } from "prisma/config";
 
 export default defineConfig({
@@ -8,9 +8,6 @@ export default defineConfig({
     seed: "tsx prisma/seed.ts",
   },
   datasource: {
-    url:
-      process.env.DIRECT_URL ??
-      process.env.DATABASE_URL ??
-      "postgresql://postgres:postgres@127.0.0.1:5432/teamflow?schema=public",
+    url: process.env.DIRECT_URL || process.env.DATABASE_URL,
   },
 });

@@ -819,6 +819,7 @@ model EmailDelivery {
   emailType         String              @default("DAILY_TEAM_REPORT") @map("email_type")
   recipientEmail    String              @map("recipient_email")
   providerMessageId String?             @unique @map("provider_message_id")
+  requestPayload    Json?               @map("request_payload") @db.JsonB
   status            EmailDeliveryStatus @default(PENDING)
   attemptCount      Int                 @default(0) @map("attempt_count")
   lastError         String?             @map("last_error")
