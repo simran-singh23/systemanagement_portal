@@ -3,7 +3,7 @@
 import { AuthError } from "next-auth";
 import { headers } from "next/headers";
 import { redirect } from "next/navigation";
-import { signIn } from "@/auth";
+import { signIn, signOut } from "@/auth";
 import { requireUser } from "@/lib/dal/auth";
 import { consumePasswordLinkRequest } from "@/lib/auth-rate-limit";
 import { changeCurrentPassword, consumePasswordToken, sendPasswordSetupOrReset } from "@/lib/password-account";
@@ -65,5 +65,6 @@ export async function changePassword(_state: AuthFormState, formData: FormData):
   } catch (error) {
     return { message: error instanceof Error ? error.message : "Password change failed." };
   }
-  return { success: true, message: "Password updated. Sign in again on your other devices." };
+  await signOut({ redirectTo: "/login?password=updated" });
+  return { success: true, message: "Password updated." };
 }

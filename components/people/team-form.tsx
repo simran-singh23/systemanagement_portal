@@ -6,7 +6,7 @@ import { createTeam, updateTeam } from "@/actions/team.actions";
 import { SubmitButton } from "@/components/people/submit-button";
 import type { FormState } from "@/lib/validations";
 
-type MemberOption = { id: string; name: string; email: string; role: string; department: string | null };
+type MemberOption = { id: string; name: string; email: string; role: string; department: string | null; status: "ACTIVE" | "INACTIVE" };
 type TeamInitial = { id: string; name: string; description: string; color: string; managerId: string; memberIds: string[] };
 
 const inputClass = "mt-2 h-11 w-full rounded-xl border border-[#dfe4eb] bg-white px-3.5 text-sm text-[#253047] outline-none transition placeholder:text-[#a7afbd] focus:border-[#80a7f5] focus:ring-4 focus:ring-[#eef4ff]";
@@ -26,7 +26,7 @@ export function TeamForm({ organizationId, members, initial, canAssignLead = tru
         <label className="text-sm font-medium text-[#344054]">Team color<input className={`${inputClass} px-2`} name="color" type="color" defaultValue={initial?.color ?? "#2563EB"} /></label>
       </div>
       <label className="block text-sm font-medium text-[#344054]">Description<textarea name="description" rows={3} defaultValue={initial?.description} placeholder="What this team owns and how it works." className="mt-2 w-full resize-none rounded-xl border border-[#dfe4eb] bg-white px-3.5 py-3 text-sm text-[#253047] outline-none transition focus:border-[#80a7f5] focus:ring-4 focus:ring-[#eef4ff]" /></label>
-      {canAssignLead ? <label className="block text-sm font-medium text-[#344054]">Team lead<select className={inputClass} name="managerId" defaultValue={initial?.managerId ?? ""}><option value="">No lead assigned</option>{members.map((member) => <option key={member.id} value={member.id}>{member.name} · {member.role.replaceAll("_", " ").toLowerCase()}</option>)}</select></label> : <div><input type="hidden" name="managerId" value={initial?.managerId ?? ""} /><p className="text-sm font-medium text-[#344054]">Team lead</p><div className={`${inputClass} flex items-center bg-[#f5f7fa] text-[#667085]`}>{members.find((member) => member.id === initial?.managerId)?.name || "No lead assigned"}</div><p className="mt-1.5 text-xs text-[#98a2b3]">A product manager can change team leadership.</p></div>}
+      {canAssignLead ? <label className="block text-sm font-medium text-[#344054]">Team lead<select className={inputClass} name="managerId" defaultValue={initial?.managerId ?? ""}><option value="">No lead assigned</option>{members.map((member) => <option key={member.id} value={member.id}>{member.name} · {member.status === "ACTIVE" ? member.role.replaceAll("_", " ").toLowerCase() : "inactive — remove assignment to save"}</option>)}</select>{state.errors?.managerId && <span role="alert" className="mt-1.5 block text-xs text-[#b42318]">{state.errors.managerId[0]}</span>}</label> : <div><input type="hidden" name="managerId" value={initial?.managerId ?? ""} /><p className="text-sm font-medium text-[#344054]">Team lead</p><div className={`${inputClass} flex items-center bg-[#f5f7fa] text-[#667085]`}>{members.find((member) => member.id === initial?.managerId)?.name || "No lead assigned"}</div><p className="mt-1.5 text-xs text-[#98a2b3]">A product manager can change team leadership.</p>{state.errors?.managerId && <p role="alert" className="mt-1.5 text-xs text-[#b42318]">{state.errors.managerId[0]}</p>}</div>}
 
       <fieldset>
         <legend className="text-sm font-medium text-[#344054]">Members</legend>
@@ -36,11 +36,12 @@ export function TeamForm({ organizationId, members, initial, canAssignLead = tru
             <label key={member.id} className="flex cursor-pointer items-center gap-3 rounded-xl border border-transparent bg-white p-3 transition hover:border-[#c9d8f6]">
               <input type="checkbox" name="memberIds" value={member.id} defaultChecked={initial?.memberIds.includes(member.id)} className="size-4 rounded accent-[#2563eb]" />
               <span className="grid size-8 shrink-0 place-items-center rounded-lg bg-[#eef4ff] text-[10px] font-bold text-[#2555a7]">{member.name.split(" ").map((part) => part[0]).slice(0, 2).join("")}</span>
-              <span className="min-w-0"><span className="block truncate text-sm font-medium text-[#344054]">{member.name}</span><span className="block truncate text-[11px] text-[#98a2b3]">{member.department || "No department"}</span></span>
+              <span className="min-w-0"><span className="block truncate text-sm font-medium text-[#344054]">{member.name}</span><span className="block truncate text-[11px] text-[#98a2b3]">{member.status === "ACTIVE" ? member.department || "No department" : "Inactive account or organization membership — remove this selection to save"}</span></span>
             </label>
           ))}
           {!members.length && <p className="p-4 text-sm text-[#7c8799]">Add active employees before assigning team members.</p>}
         </div>
+        {state.errors?.memberIds && <p role="alert" className="mt-2 text-xs text-[#b42318]">{state.errors.memberIds[0]}</p>}
       </fieldset>
 
       <div className="flex flex-wrap items-center justify-end gap-3 border-t border-[#edf0f4] pt-5">

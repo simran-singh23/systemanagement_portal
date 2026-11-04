@@ -71,6 +71,7 @@ export function EmployeeForm({ organizationId, actorRole, teams, initial }: Empl
           <select className={inputClass} name="role" defaultValue={initial?.role ?? "EMPLOYEE"}>
             {roles.map((role) => <option key={role} value={role}>{role.replaceAll("_", " ").toLowerCase()}</option>)}
           </select>
+          {state.errors?.role && <span className="mt-1.5 block text-xs text-[#b42318]">{state.errors.role[0]}</span>}
         </label>
         <label className="text-sm font-medium text-[#344054]">
           Primary team
@@ -78,6 +79,7 @@ export function EmployeeForm({ organizationId, actorRole, teams, initial }: Empl
             <option value="">No team assigned</option>
             {teams.map((team) => <option key={team.id} value={team.id}>{team.name}</option>)}
           </select>
+          {state.errors?.teamId && <span className="mt-1.5 block text-xs text-[#b42318]">{state.errors.teamId[0]}</span>}
         </label>
         {initial && (
           <label className="text-sm font-medium text-[#344054]">
@@ -87,6 +89,7 @@ export function EmployeeForm({ organizationId, actorRole, teams, initial }: Empl
               <option value="INVITED">Invited</option>
               <option value="SUSPENDED">Deactivated</option>
             </select>
+            {state.errors?.status && <span className="mt-1.5 block text-xs text-[#b42318]">{state.errors.status[0]}</span>}
           </label>
         )}
       </div>

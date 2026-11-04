@@ -1,7 +1,7 @@
 import type { Metadata } from "next";
 import { redirect } from "next/navigation";
 import { logout } from "@/actions/auth.actions";
-import { requireUser } from "@/lib/dal/auth";
+import { requireSignedInUser } from "@/lib/dal/auth";
 import { dashboardPathForRole } from "@/lib/permissions";
 import { hasApprovedOrganizationAccess } from "@/lib/member-access";
 import { prisma } from "@/lib/prisma";
@@ -9,7 +9,7 @@ import { prisma } from "@/lib/prisma";
 export const metadata: Metadata = { title: "Workspace access pending" };
 
 export default async function PendingAccessPage() {
-  const user = await requireUser();
+  const user = await requireSignedInUser();
   const [memberships, ownedOrganizationCount] = await Promise.all([
     prisma.organizationMember.findMany({
       where: { userId: user.id },

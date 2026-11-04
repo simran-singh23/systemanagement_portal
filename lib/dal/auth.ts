@@ -15,6 +15,7 @@ export const getCurrentUser = cache(async () => {
 });
 
 export async function requireUser() { const user = await getCurrentUser(); if (!user || user.status !== "ACTIVE") redirect("/login"); return user; }
+export async function requireSignedInUser() { const user = await getCurrentUser(); if (!user || user.status === "SUSPENDED") redirect("/login"); return user; }
 export async function requireRole(allowedRoles: readonly UserRole[]) { const user = await requireUser(); if (!allowedRoles.includes(user.role)) redirect(dashboardPathForRole(user.role)); return user; }
 export async function requirePermission(permission: Permission) { const user = await requireUser(); if (!hasPermission(user.role, permission)) redirect("/unauthorized"); return user; }
 

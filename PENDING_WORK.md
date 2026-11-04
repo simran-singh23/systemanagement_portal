@@ -5,7 +5,6 @@ Updated: 31 October 2026. Owner of the next development batches: Simran.
 Start with **Teams**, then **Employee Management**. These sections already have implementation code; verify their real workflows and fix failures before adding more features. Work one batch at a time and keep the existing backend/task regressions passing.
 
 ## 1. Current baseline — already completed
-
 - Local setup supports separate development/test databases, consistent environment loading, demo password login, migrations and seeding.
 - The clean-install chain has **19 migrations**. PostgreSQL transaction locks now work with Prisma's pg adapter.
 - Password login and role routing, the employee workday, leave approval, and deactivation closing sessions have automated coverage.

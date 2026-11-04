@@ -65,6 +65,7 @@ async function validateRelations(
   assignedToId: string | undefined,
   actorId: string,
   actorRole: UserRole,
+  allowExistingAssigneeOutsideTeam = false,
 ) {
   const [team, assignee] = await Promise.all([
     teamId ? client.team.findFirst({ where: { id: teamId, organizationId }, select: { id: true, managerId: true } }) : null,
@@ -78,7 +79,7 @@ async function validateRelations(
   if (actorRole === "TEAM_LEAD" && (!team || team.managerId !== actorId)) return "Team leads can manage tasks only for the team they lead.";
   if (assignedToId && (!assignee || assignee.status !== "ACTIVE" || assignee.user.status !== "ACTIVE")) return "Assign this task to an active organization member.";
 
-  if (team && assignedToId) {
+  if (team && assignedToId && !allowExistingAssigneeOutsideTeam) {
     const member = await client.teamMember.findUnique({ where: { teamId_userId: { teamId: team.id, userId: assignedToId } }, select: { id: true } });
     if (!member) return "The selected employee must belong to the selected team.";
   }
@@ -150,7 +151,8 @@ export async function updateTask(taskId: string, _state: FormState, formData: Fo
       const currentRole = await assertActiveOrganizationAccess(tx, parsed.data.organizationId, authorization.user.id, "tasks:manage");
       const latest = await tx.task.findFirst({ where: { id: taskId, organizationId: parsed.data.organizationId, archivedAt: null, ...(currentRole === "TEAM_LEAD" ? { team: { managerId: authorization.user.id } } : {}) }, select: { updatedAt: true } });
       if (!latest || latest.updatedAt.getTime() !== current.updatedAt.getTime()) throw new Error("TASK_STATE_CHANGED");
-      const relationError = await validateRelations(tx, parsed.data.organizationId, parsed.data.teamId, parsed.data.assignedToId, authorization.user.id, currentRole);
+      const unchangedExistingAssignment = current.assignedToId === (parsed.data.assignedToId ?? null) && current.teamId === (parsed.data.teamId ?? null);
+      const relationError = await validateRelations(tx, parsed.data.organizationId, parsed.data.teamId, parsed.data.assignedToId, authorization.user.id, currentRole, unchangedExistingAssignment);
       if (relationError) throw new TaskInputError(relationError);
       const { dates, timezone } = await taskDates(tx, parsed.data.organizationId, parsed.data.startDate, parsed.data.dueDate);
       if (current.assignedToId !== (parsed.data.assignedToId ?? null) || current.status !== parsed.data.status || current.teamId !== (parsed.data.teamId ?? null)) {

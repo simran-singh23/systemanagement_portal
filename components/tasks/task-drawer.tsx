@@ -31,7 +31,14 @@ export function TaskDrawer({ organizationId, employees, teams, initial, timezone
   const action = initial ? updateTask.bind(null, initial.id) : createTask;
   const [state, formAction] = useActionState(action, initialState);
   const [teamId, setTeamId] = useState(initial?.teamId || "");
-  const availableEmployees = useMemo(() => teamId ? employees.filter((employee) => employee.teamIds.includes(teamId)) : employees, [employees, teamId]);
+  const availableEmployees = useMemo(() => {
+    const available = teamId ? employees.filter((employee) => employee.teamIds.includes(teamId)) : employees;
+    if (initial && teamId === initial.teamId && initial.assignedToId && !available.some((employee) => employee.id === initial.assignedToId)) {
+      const previousAssignee = employees.find((employee) => employee.id === initial.assignedToId);
+      if (previousAssignee) return [...available, previousAssignee];
+    }
+    return available;
+  }, [employees, initial, teamId]);
 
   return (
     <div className="fixed inset-0 z-[70] flex justify-end bg-[#101828]/35 backdrop-blur-[2px]" role="dialog" aria-modal="true" aria-labelledby="task-form-title">
@@ -48,7 +55,7 @@ export function TaskDrawer({ organizationId, employees, teams, initial, timezone
             <label className="block text-sm font-medium text-[#344054]">Description<textarea name="description" rows={5} defaultValue={initial?.description} placeholder="Add context, acceptance criteria, or useful links." className="mt-2 w-full resize-y rounded-xl border border-[#dfe4eb] bg-white px-3.5 py-3 text-sm text-[#253047] outline-none focus:border-[#80a7f5] focus:ring-4 focus:ring-[#eef4ff]" /></label>
             <div className="grid gap-5 sm:grid-cols-2">
               <label className="text-sm font-medium text-[#344054]">Team<select name="teamId" value={teamId} onChange={(event) => setTeamId(event.target.value)} className={inputClass}><option value="">No team</option>{teams.map((team) => <option key={team.id} value={team.id}>{team.name}</option>)}</select></label>
-              <label className="text-sm font-medium text-[#344054]">Assigned employee<select name="assignedToId" defaultValue={initial?.assignedToId || ""} className={inputClass}><option value="">Unassigned</option>{availableEmployees.map((employee) => <option key={employee.id} value={employee.id}>{employee.name} · {employee.email}</option>)}</select></label>
+              <label className="text-sm font-medium text-[#344054]">Assigned employee<select name="assignedToId" defaultValue={initial?.assignedToId || ""} className={inputClass}><option value="">Unassigned</option>{availableEmployees.map((employee) => <option key={employee.id} value={employee.id}>{employee.name} · {employee.email}{initial?.assignedToId === employee.id && teamId === initial.teamId && !employee.teamIds.includes(teamId) ? " · existing assignment" : ""}</option>)}</select></label>
               <label className="text-sm font-medium text-[#344054]">Priority<select name="priority" defaultValue={initial?.priority || "MEDIUM"} className={inputClass}><option value="LOW">Low</option><option value="MEDIUM">Medium</option><option value="HIGH">High</option><option value="URGENT">Urgent</option></select></label>
               <label className="text-sm font-medium text-[#344054]">Status<select name="status" defaultValue={initial?.status || "TODO"} className={inputClass}><option value="TODO">To do</option><option value="IN_PROGRESS">In progress</option><option value="BLOCKED">Blocked</option><option value="REVIEW">In review</option><option value="COMPLETED">Completed</option></select></label>
               <label className="text-sm font-medium text-[#344054]">Start date<input name="startDate" type="datetime-local" defaultValue={initial?.startDate} className={inputClass} />{state.errors?.startDate ? <span className="mt-1.5 block text-xs text-[#b42318]">{state.errors.startDate[0]}</span> : null}</label>

@@ -9,7 +9,8 @@ const password = "TeamFlow-task-workflow-123";
 type Actor = { id: string; email: string };
 type TasksFixture = {
   prisma: PrismaClient; organizationId: string; foreignOrganizationId: string;
-  manager: Actor; lead: Actor; employee: Actor; otherEmployee: Actor; suspended: Actor;
+  owner: Actor; manager: Actor; lead: Actor; employee: Actor; otherEmployee: Actor; suspended: Actor;
+  foreignEmployee: Actor;
   teamId: string; otherTeamId: string; taskId: string; otherTaskId: string; foreignTaskId: string;
 };
 
@@ -37,6 +38,7 @@ export const test = base.extend<{ tasks: TasksFixture }>({
       const employee = await actor("Task employee", "EMPLOYEE");
       const otherEmployee = await actor("Other employee", "EMPLOYEE");
       const suspended = await actor("Suspended employee", "EMPLOYEE", "SUSPENDED");
+      const foreignEmployee = await actor("Foreign employee", "EMPLOYEE");
       const organization = await prisma.organization.create({ data: {
         name: "Task workflow", slug: `tasks-${suffix}`, ownerId: owner.id,
         members: { create: [owner, manager, lead, employee, otherEmployee, suspended].map((user) => ({ userId: user.id, role: user.role, status: "ACTIVE" })) },
@@ -45,12 +47,13 @@ export const test = base.extend<{ tasks: TasksFixture }>({
       organizations.push(organization.id);
       const foreign = await prisma.organization.create({ data: { name: "Foreign organization", slug: `foreign-${suffix}`, ownerId: owner.id } });
       organizations.push(foreign.id);
+      await prisma.organizationMember.create({ data: { organizationId: foreign.id, userId: foreignEmployee.id, role: "EMPLOYEE", status: "ACTIVE" } });
       const team = await prisma.team.create({ data: { organizationId: organization.id, name: "Delivery team", managerId: lead.id, members: { create: [lead, employee, otherEmployee, suspended].map((user) => ({ userId: user.id })) } } });
       const otherTeam = await prisma.team.create({ data: { organizationId: organization.id, name: "Other team", managerId: manager.id, members: { create: { userId: otherEmployee.id } } } });
       const task = await prisma.task.create({ data: { organizationId: organization.id, teamId: team.id, title: "Task workflow item", createdById: manager.id, assignedToId: employee.id, status: "TODO", position: 0 } });
       const otherTask = await prisma.task.create({ data: { organizationId: organization.id, teamId: otherTeam.id, title: "Other team private item", createdById: manager.id, assignedToId: otherEmployee.id, status: "TODO", position: 1 } });
       const foreignTask = await prisma.task.create({ data: { organizationId: foreign.id, title: "Foreign private task", createdById: owner.id, status: "TODO" } });
-      await run({ prisma, organizationId: organization.id, foreignOrganizationId: foreign.id, manager, lead, employee, otherEmployee, suspended, teamId: team.id, otherTeamId: otherTeam.id, taskId: task.id, otherTaskId: otherTask.id, foreignTaskId: foreignTask.id });
+      await run({ prisma, organizationId: organization.id, foreignOrganizationId: foreign.id, owner, manager, lead, employee, otherEmployee, suspended, foreignEmployee, teamId: team.id, otherTeamId: otherTeam.id, taskId: task.id, otherTaskId: otherTask.id, foreignTaskId: foreignTask.id });
     } finally {
       await prisma.break.deleteMany({ where: { organizationId: { in: organizations } } });
       await prisma.workSession.deleteMany({ where: { organizationId: { in: organizations } } });

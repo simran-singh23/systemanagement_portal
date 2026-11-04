@@ -7,6 +7,7 @@ import { prisma } from "@/lib/prisma";
 import { reconcileAccountAccess } from "@/lib/member-access";
 import { hashPassword, newPasswordSchema } from "@/lib/password";
 import { isPasswordTokenUsable } from "@/lib/password-token-policy";
+import { singlePendingInvitationId } from "@/lib/invitation-policy";
 
 const TOKEN_LIFETIME_MS = 30 * 60_000;
 
@@ -126,6 +127,13 @@ export async function consumePasswordToken(token: string, candidatePassword: str
 
   const passwordHash = await hashPassword(parsedPassword.data);
   await prisma.$transaction(async (tx) => {
+    let invitedMembershipId: string | null = null;
+    if (record.purpose === "INITIAL_SETUP") {
+      const invitations = await tx.organizationMember.findMany({ where: { userId: record.user.id, status: "INVITED" }, select: { id: true } });
+      if (invitations.length > 1) throw new Error("This password link is invalid or has expired.");
+      invitedMembershipId = singlePendingInvitationId(invitations);
+    }
+
     const claimed = await tx.passwordToken.updateMany({ where: { id: record.id, consumedAt: null, expiresAt: { gt: new Date() } }, data: { consumedAt: new Date() } });
     if (claimed.count !== 1) throw new Error("This password link is invalid or has expired.");
 
@@ -139,8 +147,9 @@ export async function consumePasswordToken(token: string, candidatePassword: str
       },
     });
     if (updated.count !== 1) throw new Error("This password link is invalid or has expired.");
-    if (record.purpose === "INITIAL_SETUP") {
-      await tx.organizationMember.updateMany({ where: { userId: record.user.id, status: "INVITED" }, data: { status: "ACTIVE", joinedAt: new Date() } });
+    if (record.purpose === "INITIAL_SETUP" && invitedMembershipId) {
+      const activated = await tx.organizationMember.updateMany({ where: { id: invitedMembershipId, userId: record.user.id, status: "INVITED" }, data: { status: "ACTIVE", joinedAt: new Date() } });
+      if (activated.count !== 1) throw new Error("This password link is invalid or has expired.");
       await reconcileAccountAccess(tx, record.user.id);
     }
     await tx.passwordToken.deleteMany({ where: { userId: record.user.id, consumedAt: null } });

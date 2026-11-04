@@ -11,6 +11,7 @@ import { getGoogleOAuthCredentials } from "@/lib/google-oauth-config";
 import { authVersionAccepts, credentialsSchema, getDummyPasswordHash, verifyPassword } from "@/lib/password";
 import { consumeCredentialsAttempt } from "@/lib/auth-rate-limit";
 import { recordAuthSecurityEvent } from "@/lib/password-account";
+import { singlePendingInvitationId } from "@/lib/invitation-policy";
 
 const googleOAuth = getGoogleOAuthCredentials();
 
@@ -87,11 +88,15 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
           select: { id: true, role: true, status: true, authVersion: true, emailVerified: true },
         });
 
-        // An invitation is activated only after the OAuth callback has completed
-        // and Auth.js has persisted the provider account, not in the pre-link signIn hook.
+        // OAuth proves control of the account email, but not which of several
+        // organization invitations the user intends to accept. Fail closed if
+        // the account has multiple pending memberships.
         if (user && account?.provider === "google" && dbUser?.status === "INVITED" && dbUser.emailVerified) {
           await prisma.$transaction(async (tx) => {
-            await tx.organizationMember.updateMany({ where: { userId: dbUser!.id, status: "INVITED" }, data: { status: "ACTIVE", joinedAt: new Date() } });
+            const invitations = await tx.organizationMember.findMany({ where: { userId: dbUser!.id, status: "INVITED" }, select: { id: true } });
+            const membershipId = singlePendingInvitationId(invitations);
+            if (!membershipId) return;
+            await tx.organizationMember.update({ where: { id: membershipId }, data: { status: "ACTIVE", joinedAt: new Date() } });
             await reconcileAccountAccess(tx, dbUser!.id);
           });
           dbUser = await prisma.user.findUnique({ where: { id: String(userId) }, select: { id: true, role: true, status: true, authVersion: true, emailVerified: true } });
@@ -123,11 +128,16 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
     authorized({ auth: session, request }) {
       const path = request.nextUrl.pathname;
       const user = session?.user;
+      const isAccountSignedIn = Boolean(user?.id && user.status !== "SUSPENDED");
       const isAuthenticated = Boolean(user?.id && user.status === "ACTIVE");
       const isManagerRoute = path.startsWith("/dashboard");
       const isEmployeeRoute = path.startsWith("/employee");
       const isProtectedRoute = isManagerRoute || isEmployeeRoute || path.startsWith("/auth/redirect") || path === "/pending-access";
 
+      if (path === "/pending-access" && isAccountSignedIn) return true;
+      if (path === "/auth/redirect" && user?.id && user.status === "INVITED") {
+        return NextResponse.redirect(new URL("/pending-access", request.nextUrl));
+      }
       if (isProtectedRoute && !isAuthenticated) return false;
 
       if (isManagerRoute && user?.role === "EMPLOYEE") {
