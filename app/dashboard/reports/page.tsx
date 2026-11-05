@@ -4,10 +4,11 @@ import type { Prisma, PulseMood, ReportStatus } from "@prisma/client";
 import { ReportStatusBadge } from "@/components/reports/report-status";
 import { ActiveFilterChips, FilterDropdown, PaginationControls, SortSelector } from "@/components/search/table-controls";
 import { requireCurrentOrganization } from "@/lib/dal/auth";
-import { databaseDate, dateKeyInZone } from "@/lib/date-time";
+import { databaseDate, dateKeyInZone, isValidDateKey } from "@/lib/date-time";
 import { prisma } from "@/lib/prisma";
 import { formatMilliseconds } from "@/lib/work-time";
 import { allowedValue, boundedPage, parsePagination, safeQuery } from "@/lib/search/params";
+import { isReportExpected } from "@/lib/report-evidence";
 
 export const metadata: Metadata = { title: "Daily reports" };
 export const dynamic = "force-dynamic";
@@ -18,9 +19,9 @@ export default async function ReportsPage({ searchParams }: { searchParams: Prom
   const settings = await prisma.organizationSettings.findUnique({ where: { organizationId: organization.id }, select: { timezone: true, workDays: true, requireDailyReports: true } });
   const timezone = settings?.timezone ?? "Asia/Kolkata";
   const today = dateKeyInZone(new Date(), timezone);
-  const dateKey = filters.date && /^\d{4}-\d{2}-\d{2}$/.test(filters.date) ? filters.date : today;
+  const dateKey = filters.date && isValidDateKey(filters.date) ? filters.date : today;
   const date = databaseDate(dateKey);
-  const validDate = (value?: string) => value && /^\d{4}-\d{2}-\d{2}$/.test(value) ? value : undefined;
+  const validDate = (value?: string) => value && isValidDateKey(value) ? value : undefined;
   const from = validDate(filters.from);
   const to = validDate(filters.to);
   const range = from && to && from > to ? undefined : { ...(from ? { gte: databaseDate(from) } : {}), ...(to ? { lte: databaseDate(to) } : {}) };
@@ -35,18 +36,20 @@ export default async function ReportsPage({ searchParams }: { searchParams: Prom
   const reportScope: Prisma.DailyReportWhereInput = { organizationId: organization.id, reportDate: date, user: leadUserScope };
   const filtered: Prisma.DailyReportWhereInput = { organizationId: organization.id, reportDate: range && Object.keys(range).length ? range : date, user: leadUserScope, ...(filters.employee ? { userId: filters.employee } : {}), ...(status ? { status } : {}), ...(pulse ? { pulse: { mood: pulse } } : {}), ...(q ? { OR: [{ summary: { contains: q, mode: "insensitive" } }, { user: { name: { contains: q, mode: "insensitive" } } }, { user: { email: { contains: q, mode: "insensitive" } } }] } : {}) };
   const orderBy: Prisma.DailyReportOrderByWithRelationInput[] = sort === "oldest" ? [{ reportDate: "asc" }, { id: "asc" }] : sort === "name_asc" ? [{ user: { name: "asc" } }, { id: "asc" }] : sort === "name_desc" ? [{ user: { name: "desc" } }, { id: "asc" }] : sort === "status" ? [{ status: "asc" }, { updatedAt: "desc" }, { id: "asc" }] : [{ submittedAt: "desc" }, { updatedAt: "desc" }, { id: "asc" }];
-  const [members, approvedLeave, allReports, initialReports, count] = await Promise.all([
+  const [members, approvedLeave, holiday, allReports, initialReports, count] = await Promise.all([
     prisma.organizationMember.findMany({ where: memberScope, include: { user: { select: { id: true, name: true, email: true } } }, orderBy: { user: { name: "asc" } } }),
     prisma.leaveRequest.findMany({ where: { organizationId: organization.id, status: "APPROVED", startDate: { lte: date }, endDate: { gte: date }, user: leadUserScope }, select: { userId: true } }),
+    prisma.organizationHoliday.findUnique({ where: { organizationId_holidayDate: { organizationId: organization.id, holidayDate: date } }, select: { id: true } }),
     prisma.dailyReport.findMany({ where: reportScope, include: { pulse: true, tasks: true } }),
     prisma.dailyReport.findMany({ where: filtered, include: { user: { select: { name: true, email: true } }, pulse: true, tasks: true }, orderBy, skip: pagination.skip, take: pagination.pageSize }),
     prisma.dailyReport.count({ where: filtered }),
   ]);
   const pageInfo = boundedPage(pagination.page, count, pagination.pageSize);
   const reports = pageInfo.page === pagination.page ? initialReports : await prisma.dailyReport.findMany({ where: filtered, include: { user: { select: { name: true, email: true } }, pulse: true, tasks: true }, orderBy, skip: (pageInfo.page - 1) * pagination.pageSize, take: pagination.pageSize });
-  const workingDay = (settings?.workDays ?? [1, 2, 3, 4, 5]).includes(date.getUTCDay());
+  const workDays = settings?.workDays ?? [1, 2, 3, 4, 5];
+  const shouldExpectReports = isReportExpected(dateKey, workDays, Boolean(holiday), settings?.requireDailyReports !== false);
   const leaveIds = new Set(approvedLeave.map((item) => item.userId));
-  const expected = settings?.requireDailyReports !== false && workingDay ? members.filter((item) => !leaveIds.has(item.userId)).length : 0;
+  const expected = shouldExpectReports ? members.filter((item) => !leaveIds.has(item.userId)).length : 0;
   const submitted = allReports.filter((item) => item.status === "SUBMITTED" || item.status === "REVIEWED").length;
   const drafts = allReports.filter((item) => item.status === "DRAFT").length;
   const missing = Math.max(0, expected - allReports.length);

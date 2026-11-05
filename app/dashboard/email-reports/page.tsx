@@ -2,7 +2,7 @@ import type { Metadata } from "next";
 import Link from "next/link";
 import type { EmailDeliveryStatus, Prisma } from "@prisma/client";
 import { requireCurrentOrganization } from "@/lib/dal/auth";
-import { databaseDate } from "@/lib/date-time";
+import { databaseDate, isValidDateKey } from "@/lib/date-time";
 import { prisma } from "@/lib/prisma";
 
 export const metadata: Metadata = { title: "Email report delivery" };
@@ -14,7 +14,7 @@ const statuses: EmailDeliveryStatus[] = ["PENDING", "SENDING", "SENT", "DELIVERE
 export default async function EmailReportsPage({ searchParams }: { searchParams: Promise<Search> }) {
   const [{ organization }, filters] = await Promise.all([requireCurrentOrganization("organization:manage"), searchParams]);
   const status = statuses.includes(filters.status as EmailDeliveryStatus) ? filters.status as EmailDeliveryStatus : undefined;
-  const date = filters.date && /^\d{4}-\d{2}-\d{2}$/.test(filters.date) && !Number.isNaN(databaseDate(filters.date).getTime()) ? databaseDate(filters.date) : undefined;
+  const date = filters.date && isValidDateKey(filters.date) ? databaseDate(filters.date) : undefined;
   const q = filters.q?.trim().slice(0, 100) || "";
   const page = Math.max(1, Math.min(1000, Number.parseInt(filters.page ?? "1", 10) || 1));
   const where: Prisma.EmailDeliveryWhereInput = { organizationId: organization.id, ...(status ? { status } : {}), ...(date ? { reportDate: date } : {}), ...(q ? { recipientEmail: { contains: q, mode: "insensitive" } } : {}) };

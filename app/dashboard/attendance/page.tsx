@@ -5,7 +5,7 @@ import { AttendanceStatusBadge } from "@/components/attendance/attendance-status
 import { Icon } from "@/components/ui/icons";
 import { ActiveFilterChips, PaginationControls, SortSelector } from "@/components/search/table-controls";
 import { requireCurrentOrganization } from "@/lib/dal/auth";
-import { databaseDate, dateKeyInZone, durationMinutes, formatDuration, formatTimeInZone } from "@/lib/date-time";
+import { databaseDate, dateKeyInZone, durationMinutes, formatDuration, formatTimeInZone, isValidDateKey } from "@/lib/date-time";
 import { prisma } from "@/lib/prisma";
 import { allowedValue, boundedPage, parsePagination, safeQuery } from "@/lib/search/params";
 
@@ -20,7 +20,7 @@ export default async function AttendancePage({ searchParams }: { searchParams: P
   const settings = await prisma.organizationSettings.findUnique({ where: { organizationId: organization.id }, select: { timezone: true } });
   const timezone = settings?.timezone ?? "Asia/Kolkata";
   const todayKey = dateKeyInZone(new Date(), timezone);
-  const requestedDate = filters.date && /^\d{4}-\d{2}-\d{2}$/.test(filters.date) && !Number.isNaN(databaseDate(filters.date).getTime()) ? filters.date : todayKey;
+  const requestedDate = filters.date && isValidDateKey(filters.date) ? filters.date : todayKey;
   const attendanceDate = databaseDate(requestedDate);
   const effectiveRole = membership?.role ?? actor.role;
   const leadUserScope: Prisma.UserWhereInput = effectiveRole === "TEAM_LEAD" ? { teamMembers: { some: { team: { organizationId: organization.id, managerId: actor.id } } } } : {};

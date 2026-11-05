@@ -5,6 +5,7 @@ import { z } from "zod";
 import { requireOrganizationPermission } from "@/lib/dal/auth";
 import { prisma } from "@/lib/prisma";
 import { validTimeZone } from "@/lib/automation-schedule";
+import { validateAutomationScheduleOrder } from "@/lib/organization-settings";
 
 export type AutomationSettingsState = { success?: boolean; message?: string };
 
@@ -22,6 +23,9 @@ export async function updateAutomationSettings(_state: AutomationSettingsState, 
   const parsed = schema.safeParse(Object.fromEntries(["organizationId", "timezone", "workdayStart", "workdayEnd", "checkInReminderTime", "checkInCutoffTime", "lunchReminderTime", "dailyReportReminderTime", "dailyReportDueTime", "managerSummaryTime", "taskDeadlineReminderHours"].map((key) => [key, String(formData.get(key) ?? "")])));
   if (!parsed.success || !validTimeZone(parsed.data?.timezone ?? "")) return { message: "Check the timezone, HH:MM schedules, and comma-separated deadline hours." };
   await requireOrganizationPermission(parsed.data.organizationId, "organization:manage");
+  const currentSettings = await prisma.organizationSettings.findUnique({ where: { organizationId: parsed.data.organizationId }, select: { overnightShiftEnabled: true, dailyEmailEnabled: true, dailyEmailTime: true } });
+  const scheduleError = validateAutomationScheduleOrder({ ...parsed.data, overnight: currentSettings?.overnightShiftEnabled ?? false, dailyEmailEnabled: currentSettings?.dailyEmailEnabled, dailyEmailTime: currentSettings?.dailyEmailTime ?? undefined });
+  if (scheduleError) return { message: scheduleError };
   const hours = [...new Set(parsed.data.taskDeadlineReminderHours.split(",").map(Number).filter((value) => value > 0 && value <= 720))].sort((a, b) => b - a);
   if (!hours.length) return { message: "Add at least one task deadline reminder window between 1 and 720 hours." };
   const workDays = [...new Set(formData.getAll("workDays").map(Number).filter((value) => Number.isInteger(value) && value >= 0 && value <= 6))].sort();

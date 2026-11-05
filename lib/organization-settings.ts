@@ -90,6 +90,30 @@ export function validateTimezone(value: string) {
   return validTimeZone(value);
 }
 
+export function validateAutomationScheduleOrder(input: {
+  workdayStart: string; workdayEnd: string; overnight: boolean;
+  checkInReminderTime: string; checkInCutoffTime: string;
+  dailyReportReminderTime: string; dailyReportDueTime: string; managerSummaryTime: string;
+  dailyEmailEnabled?: boolean; dailyEmailTime?: string;
+}) {
+  const officeError = validateOfficeWindow(input.workdayStart, input.workdayEnd, input.overnight);
+  if (officeError) return officeError;
+  const minute = (clock: string) => {
+    const [hour, value] = clock.split(":").map(Number);
+    const result = hour * 60 + value;
+    return input.overnight && result < parseClock(input.workdayStart) ? result + 1440 : result;
+  };
+  if (minute(input.checkInReminderTime) > minute(input.checkInCutoffTime)) return "Set the missing check-in cutoff at or after the check-in reminder.";
+  if (minute(input.dailyReportReminderTime) > minute(input.dailyReportDueTime)) return "Set the report reminder at or before its submission deadline.";
+  if (minute(input.dailyReportDueTime) > minute(input.managerSummaryTime)) return "Set the manager summary at or after the report deadline.";
+  if (input.dailyEmailEnabled && input.dailyEmailTime && minute(input.dailyEmailTime) <= Math.max(minute(input.managerSummaryTime), minute(input.dailyReportDueTime), minute(input.workdayEnd))) {
+    return "Schedule daily email after the office workday, report deadline, and manager summary.";
+  }
+  return null;
+}
+
+function parseClock(value: string) { const [hour, minute] = value.split(":").map(Number); return hour * 60 + minute; }
+
 export function settingsImpactSummary(keys: string[]) {
   const areas = new Set<string>();
   for (const key of keys) {

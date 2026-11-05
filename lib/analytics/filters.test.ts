@@ -10,6 +10,7 @@ test("custom analytics filters preserve a bookmarkable bounded range", () => {
 test("analytics filters reject reversed and excessive ranges", () => {
   assert.throws(() => parseAnalyticsFilters({ preset: "custom", start: "2026-10-21", end: "2026-10-01" }, "UTC"));
   assert.throws(() => parseAnalyticsFilters({ preset: "custom", start: "2025-01-01", end: "2026-10-21" }, "UTC"));
+  assert.throws(() => parseAnalyticsFilters({ preset: "custom", start: "2026-02-31", end: "2026-03-10" }, "UTC"));
 });
 
 test("previous period has the same number of calendar days", () => {

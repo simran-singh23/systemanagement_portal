@@ -63,10 +63,12 @@ export async function checkIn(_state: FormState, formData: FormData): Promise<Fo
     await prisma.$transaction(async (tx) => {
       await lockUser(tx, authorization.user.id);
       await assertActiveOrganizationAccess(tx, parsed.data.organizationId, authorization.user.id, "attendance:update-own");
-      const [lockedAttendance, lockedOpen] = await Promise.all([
+      const [lockedAttendance, lockedOpen, lockedLeave] = await Promise.all([
         tx.attendance.findUnique({ where: { organizationId_userId_attendanceDate: { organizationId: parsed.data.organizationId, userId: authorization.user.id, attendanceDate } }, select: { checkInAt: true, checkOutAt: true } }),
         tx.workSession.findFirst({ where: { userId: authorization.user.id, taskId: null, endedAt: null }, select: { id: true } }),
+        tx.leaveRequest.findFirst({ where: { organizationId: parsed.data.organizationId, userId: authorization.user.id, status: "APPROVED", startDate: { lte: attendanceDate }, endDate: { gte: attendanceDate } }, select: { id: true } }),
       ]);
+      if (lockedLeave) throw new Error("APPROVED_LEAVE");
       if (lockedAttendance?.checkInAt || lockedAttendance?.checkOutAt || lockedOpen) throw new Error("ATTENDANCE_STATE_CHANGED");
       const attendance = await tx.attendance.upsert({
         where: { organizationId_userId_attendanceDate: { organizationId: parsed.data.organizationId, userId: authorization.user.id, attendanceDate } },
@@ -82,7 +84,8 @@ export async function checkIn(_state: FormState, formData: FormData): Promise<Fo
         await createNotifications(tx, reviewers, { organizationId: parsed.data.organizationId, actorId: authorization.user.id, type: "ATTENDANCE", title: "Late check-in recorded", message: `${authorization.user.name || authorization.user.email} checked in after the grace period.`, link: `/dashboard/attendance?date=${attendanceDate.toISOString().slice(0, 10)}`, relatedEntityType: "attendance", relatedEntityId: attendance.id, eventId: `attendance.late:${attendance.id}`, metadata: { attendanceId: attendance.id, status: "LATE" } });
       }
     });
-  } catch {
+  } catch (error) {
+    if (error instanceof Error && error.message === "APPROVED_LEAVE") return { message: "You have approved leave for today. Contact your manager if this changed." };
     return { message: "Check-in could not be recorded. Refresh the page and try again." };
   }
 

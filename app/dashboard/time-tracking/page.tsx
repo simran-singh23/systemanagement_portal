@@ -3,7 +3,7 @@ import Link from "next/link";
 import type { Prisma } from "@prisma/client";
 import { Icon } from "@/components/ui/icons";
 import { requireCurrentOrganization } from "@/lib/dal/auth";
-import { databaseDate, dateKeyInZone, formatTimeInZone, shiftDateKey } from "@/lib/date-time";
+import { databaseDate, dateKeyInZone, formatTimeInZone, isValidDateKey, shiftDateKey } from "@/lib/date-time";
 import { prisma } from "@/lib/prisma";
 import { formatMilliseconds, workingSummary } from "@/lib/work-time";
 
@@ -16,7 +16,7 @@ export default async function TimeTrackingPage({ searchParams }: { searchParams:
   const settings = await prisma.organizationSettings.findUnique({ where: { organizationId: organization.id }, select: { timezone: true } });
   const timezone = settings?.timezone ?? "Asia/Kolkata";
   const todayKey = dateKeyInZone(new Date(), timezone);
-  const dateKey = filters.date && /^\d{4}-\d{2}-\d{2}$/.test(filters.date) && !Number.isNaN(databaseDate(filters.date).getTime()) ? filters.date : todayKey;
+  const dateKey = filters.date && isValidDateKey(filters.date) ? filters.date : todayKey;
   const date = databaseDate(dateKey);
   const weekStart = databaseDate(shiftDateKey(dateKey, -((date.getUTCDay() + 6) % 7)));
   const weekEnd = databaseDate(shiftDateKey(weekStart.toISOString().slice(0, 10), 6));

@@ -4,6 +4,7 @@ import type { Prisma, UserRole } from "@prisma/client";
 import { prisma } from "@/lib/prisma";
 import type { GlobalSearchResponse, SearchResult } from "@/lib/search/types";
 import { searchAccessScopes } from "@/lib/search/access";
+import { databaseDate, isValidDateKey } from "@/lib/date-time";
 
 type SearchActor = { id: string; role: UserRole };
 const LIMIT = 5;
@@ -25,7 +26,7 @@ export async function globalSearch(actor: SearchActor, query: string): Promise<G
   const role = membership?.role ?? actor.role;
   const { manager, taskScope, userScope } = searchAccessScopes(role, actor.id, organizationId);
   const leadUserScope = role === "TEAM_LEAD" ? userScope : {};
-  const dateQuery = /^\d{4}-\d{2}-\d{2}$/.test(query) ? new Date(`${query}T00:00:00.000Z`) : null;
+  const dateQuery = isValidDateKey(query) ? databaseDate(query) : null;
   const taskStatuses = enumMatches(query, ["TODO", "IN_PROGRESS", "BLOCKED", "REVIEW", "COMPLETED"] as const);
   const employeeRoles = enumMatches(query, ["SUPER_ADMIN", "PRODUCT_MANAGER", "TEAM_LEAD", "EMPLOYEE"] as const);
   const attendanceStatuses = enumMatches(query, ["PRESENT", "ABSENT", "LATE", "HALF_DAY", "REMOTE", "ON_LEAVE"] as const);

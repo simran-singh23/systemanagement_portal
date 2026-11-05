@@ -12,6 +12,7 @@ import { requireCurrentOrganization } from "@/lib/dal/auth";
 import { dateKeyInZone } from "@/lib/date-time";
 import { prisma } from "@/lib/prisma";
 import { allowedValue, parsePagination, safeQuery } from "@/lib/search/params";
+import { isValidMonthKey } from "@/lib/leave";
 
 export const metadata: Metadata = { title: "Team leave" };
 export const dynamic = "force-dynamic";
@@ -29,7 +30,7 @@ export default async function ManagerLeavePage({ searchParams }: { searchParams:
   const q = safeQuery(filters.q);
   const sort = allowedValue(filters.sort, ["newest", "oldest", "start_asc", "start_desc", "status"] as const) ?? "newest";
   const settings = await prisma.organizationSettings.findUnique({ where: { organizationId: organization.id }, select: { timezone: true } });
-  const month = /^\d{4}-\d{2}$/.test(filters.month ?? "") ? filters.month! : dateKeyInZone(new Date(), settings?.timezone ?? "Asia/Kolkata").slice(0, 7);
+  const month = isValidMonthKey(filters.month ?? "") ? filters.month! : dateKeyInZone(new Date(), settings?.timezone ?? "Asia/Kolkata").slice(0, 7);
   const teamWhere = { organizationId: organization.id, ...(role === "TEAM_LEAD" ? { managerId: actor.id } : {}) };
   const [summary, result, calendar, details, teams, departments, employees] = await Promise.all([
     getLeaveSummary(organization.id),

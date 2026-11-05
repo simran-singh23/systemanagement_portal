@@ -5,7 +5,7 @@ import type { Prisma } from "@prisma/client";
 import { prisma } from "@/lib/prisma";
 import { requireCurrentOrganization, requireOrganizationPermission } from "@/lib/dal/auth";
 import { dailyReportSchema, type FormState } from "@/lib/validations";
-import { databaseDate, dateKeyInZone } from "@/lib/date-time";
+import { databaseDate, dateKeyInZone, isValidDateKey } from "@/lib/date-time";
 import { getReportDayData, reportSnapshot } from "@/lib/reports";
 import { createNotifications, getAuthorizedReviewerIds } from "@/lib/notifications";
 import { lockTransaction } from "@/lib/transaction-lock";
@@ -75,4 +75,4 @@ export async function getTodayReportData() {
 export async function getMyReportHistory() { const { user, organization } = await requireCurrentOrganization("reports:manage-own"); return prisma.dailyReport.findMany({ where: { organizationId: organization.id, userId: user.id }, orderBy: { reportDate: "desc" }, take: 100 }); }
 export async function getReportById(organizationId: string, reportId: string) { const auth = await requireOrganizationPermission(organizationId, "reports:read-all"); return prisma.dailyReport.findFirst({ where: { id: reportId, organizationId, ...(auth.membership?.role === "TEAM_LEAD" ? { user: { teamMembers: { some: { team: { managerId: auth.user.id } } } } } : {}) }, include: { user: true, tasks: true, pulse: true } }); }
 export async function getManagerReports(organizationId: string) { const auth = await requireOrganizationPermission(organizationId, "reports:read-all"); return prisma.dailyReport.findMany({ where: { organizationId, ...(auth.membership?.role === "TEAM_LEAD" ? { user: { teamMembers: { some: { team: { managerId: auth.user.id } } } } } : {}) }, orderBy: { reportDate: "desc" }, take: 100 }); }
-export async function getDailyTeamSummary(organizationId: string, reportDate: string) { const auth = await requireOrganizationPermission(organizationId, "reports:read-all"); return prisma.dailyReport.groupBy({ where: { organizationId, reportDate: databaseDate(reportDate), ...(auth.membership?.role === "TEAM_LEAD" ? { user: { teamMembers: { some: { team: { managerId: auth.user.id } } } } } : {}) }, by: ["status"], _count: { _all: true } }); }
+export async function getDailyTeamSummary(organizationId: string, reportDate: string) { const auth = await requireOrganizationPermission(organizationId, "reports:read-all"); if (!isValidDateKey(reportDate)) return []; return prisma.dailyReport.groupBy({ where: { organizationId, reportDate: databaseDate(reportDate), ...(auth.membership?.role === "TEAM_LEAD" ? { user: { teamMembers: { some: { team: { managerId: auth.user.id } } } } } : {}) }, by: ["status"], _count: { _all: true } }); }

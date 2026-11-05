@@ -18,6 +18,13 @@ test("day ranges remain a half-open interval", () => {
   assert.equal(range.end.toISOString(), "2026-10-22T18:30:00.000Z");
 });
 
+test("day ranges respect daylight-saving timezone boundaries", () => {
+  const springForward = dayRangeInZone("2026-03-08", "America/New_York");
+  const fallBack = dayRangeInZone("2026-11-01", "America/New_York");
+  assert.equal((springForward.end.getTime() - springForward.start.getTime()) / 3_600_000, 23);
+  assert.equal((fallBack.end.getTime() - fallBack.start.getTime()) / 3_600_000, 25);
+});
+
 test("durations never become negative and format consistently", () => {
   const start = new Date("2026-10-22T09:00:00.000Z");
   assert.equal(durationMinutes(start, new Date("2026-10-22T10:35:59.000Z")), 95);

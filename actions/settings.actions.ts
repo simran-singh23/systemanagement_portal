@@ -4,7 +4,7 @@ import { revalidatePath } from "next/cache";
 import type { BreakType, LeaveType, UserRole } from "@prisma/client";
 import { z } from "zod";
 import { requireCurrentOrganization } from "@/lib/dal/auth";
-import { dateKeyInZone, databaseDate } from "@/lib/date-time";
+import { dateKeyInZone, databaseDate, isValidDateKey } from "@/lib/date-time";
 import {
   ALL_BREAK_TYPES,
   ALL_LEAVE_TYPES,
@@ -12,7 +12,9 @@ import {
   settingsImpactSummary,
   sortedUniqueDays,
   validateOfficeWindow,
+  validateAutomationScheduleOrder,
   validateTimezone,
+  ORGANIZATION_SETTINGS_DEFAULTS,
 } from "@/lib/organization-settings";
 import { prisma } from "@/lib/prisma";
 import { emailSenderConfigured } from "@/lib/email/delivery";
@@ -98,6 +100,8 @@ export async function updateOrganizationSettings(_state: SettingsActionState, fo
   const officeError = validateOfficeWindow(parsed.data.workdayStart, parsed.data.workdayEnd, overnightShiftEnabled);
   if (!validateTimezone(parsed.data.timezone)) return { message: "Choose a valid IANA timezone." };
   if (officeError) return { message: officeError };
+  const scheduleError = validateAutomationScheduleOrder({ ...parsed.data, overnight: overnightShiftEnabled, dailyEmailEnabled, dailyEmailTime: parsed.data.dailyEmailTime });
+  if (scheduleError) return { message: scheduleError };
   if (!workDays.length) return { message: "Select at least one working day." };
   if (!allowedBreakTypes.length) return { message: "Allow at least one break type." };
   if (!availableLeaveTypes.length) return { message: "Enable at least one leave type." };
@@ -109,10 +113,6 @@ export async function updateOrganizationSettings(_state: SettingsActionState, fo
   if (dailyEmailEnabled && process.env.NODE_ENV !== "production" && !process.env.RESEND_TEST_RECIPIENTS?.trim()) return { message: "Configure RESEND_TEST_RECIPIENTS before enabling email outside production." };
   if (dailyEmailEnabled && !checked(formData, "enableDailyTeamSummary")) return { message: "Keep the daily team summary enabled before enabling email delivery." };
   if (dailyEmailEnabled && !parsed.data.primaryReportRecipientId) return { message: "Select a verified primary report recipient before enabling email delivery." };
-  const scheduledMinute = (clock: string) => { const [hour, minute] = clock.split(":").map(Number); const value = hour * 60 + minute; return overnightShiftEnabled && value < Number(parsed.data.workdayStart.slice(0, 2)) * 60 + Number(parsed.data.workdayStart.slice(3)) ? value + 1440 : value; };
-  if (dailyEmailEnabled && (scheduledMinute(parsed.data.dailyEmailTime) <= scheduledMinute(parsed.data.managerSummaryTime) || scheduledMinute(parsed.data.dailyEmailTime) <= scheduledMinute(parsed.data.dailyReportDueTime))) return { message: "Schedule daily email after the report deadline and manager summary generation." };
-  if (dailyEmailEnabled && scheduledMinute(parsed.data.dailyEmailTime) <= scheduledMinute(parsed.data.workdayEnd)) return { message: "Schedule daily email after the office workday ends." };
-
   const context = await settingsAdmin(parsed.data.organizationId);
   const additionalReportRecipientIds = [...new Set(formData.getAll("additionalReportRecipientIds").map(String).filter(Boolean))];
   const recipientIds = [...additionalReportRecipientIds, parsed.data.primaryReportRecipientId].filter((value): value is string => Boolean(value));
@@ -130,6 +130,7 @@ export async function updateOrganizationSettings(_state: SettingsActionState, fo
   if (parsed.data.primaryReportRecipientId && additionalReportRecipientIds.includes(parsed.data.primaryReportRecipientId)) return { message: "The primary recipient cannot also be an additional recipient." };
 
   const organizationData = { name: parsed.data.name, contactEmail: parsed.data.contactEmail, contactPhone: parsed.data.contactPhone, logoUrl: parsed.data.logoUrl, description: parsed.data.description };
+  const previous = await prisma.organizationSettings.findUnique({ where: { organizationId: context.organization.id } });
   const settingsData = {
     timezone: parsed.data.timezone,
     workdayStart: parsed.data.workdayStart,
@@ -139,10 +140,10 @@ export async function updateOrganizationSettings(_state: SettingsActionState, fo
     expectedDailyMinutes: parsed.data.expectedDailyMinutes,
     overnightShiftEnabled,
     halfDayThresholdMins: parsed.data.halfDayThresholdMins,
-    autoFinalizeAbsence: checked(formData, "autoFinalizeAbsence"),
+    autoFinalizeAbsence: previous?.autoFinalizeAbsence ?? ORGANIZATION_SETTINGS_DEFAULTS.autoFinalizeAbsence,
     absenceFinalizationTime: parsed.data.absenceFinalizationTime,
-    allowAttendanceCorrections: checked(formData, "allowAttendanceCorrections"),
-    requireCorrectionApproval: checked(formData, "requireCorrectionApproval"),
+    allowAttendanceCorrections: previous?.allowAttendanceCorrections ?? ORGANIZATION_SETTINGS_DEFAULTS.allowAttendanceCorrections,
+    requireCorrectionApproval: previous?.requireCorrectionApproval ?? ORGANIZATION_SETTINGS_DEFAULTS.requireCorrectionApproval,
     lunchReminderTime: parsed.data.lunchReminderTime,
     suggestedLunchMins: parsed.data.suggestedLunchMins,
     allowedBreakTypes,
@@ -159,7 +160,7 @@ export async function updateOrganizationSettings(_state: SettingsActionState, fo
     allowReportEditingAfterSubmission: checked(formData, "allowReportEditingAfterSubmission"),
     allowOverlappingLeaveRequests: checked(formData, "allowOverlappingLeaveRequests"),
     availableLeaveTypes,
-    requireLeaveApproval: checked(formData, "requireLeaveApproval"),
+    requireLeaveApproval: true,
     leaveAdvanceNoticeDays: parsed.data.leaveAdvanceNoticeDays,
     allowPastDateLeaveRequests: checked(formData, "allowPastDateLeaveRequests"),
     enableCheckInReminders: checked(formData, "enableCheckInReminders"),
@@ -187,7 +188,6 @@ export async function updateOrganizationSettings(_state: SettingsActionState, fo
     aiRetentionDays: parsed.data.aiRetentionDays,
   };
 
-  const previous = await prisma.organizationSettings.findUnique({ where: { organizationId: context.organization.id } });
   const changedFields = Object.entries(settingsData).filter(([key, value]) => JSON.stringify(previous?.[key as keyof typeof previous]) !== JSON.stringify(value)).map(([key]) => key);
   if (context.organization.name !== organizationData.name) changedFields.push("organizationName");
 
@@ -200,7 +200,7 @@ export async function updateOrganizationSettings(_state: SettingsActionState, fo
   return { success: true, message: changedFields.length ? "Organization policies saved. New rules apply to future activity." : "Settings are already up to date." };
 }
 
-const holidaySchema = z.object({ organizationId: z.string().min(1), holidayId: z.string().optional(), holidayDate: z.string().regex(/^\d{4}-\d{2}-\d{2}$/), name: z.string().trim().min(2).max(100), description: z.string().trim().max(500).transform((value) => value || null) });
+const holidaySchema = z.object({ organizationId: z.string().min(1), holidayId: z.string().optional(), holidayDate: z.string().refine(isValidDateKey), name: z.string().trim().min(2).max(100), description: z.string().trim().max(500).transform((value) => value || null) });
 
 async function mutateHoliday(mode: "create" | "update", _state: SettingsActionState, formData: FormData): Promise<SettingsActionState> {
   const parsed = holidaySchema.safeParse({ organizationId: field(formData, "organizationId"), holidayId: field(formData, "holidayId") || undefined, holidayDate: field(formData, "holidayDate"), name: field(formData, "name"), description: field(formData, "description") });

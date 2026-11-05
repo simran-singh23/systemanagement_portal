@@ -1,5 +1,6 @@
 import { z } from "zod";
 import { taskDateSchema } from "./task-dates";
+import { isValidDateKey } from "./date-time";
 
 export const assignableRoles = [
   "PRODUCT_MANAGER",
@@ -101,7 +102,7 @@ export const breakActionSchema = z.object({
 
 export const dailyReportSchema = z.object({
   organizationId: z.string().min(1),
-  reportDate: z.string().regex(/^\d{4}-\d{2}-\d{2}$/, "Choose a valid report date.").refine((value) => !Number.isNaN(Date.parse(`${value}T00:00:00.000Z`)), "Choose a valid report date."),
+  reportDate: z.string().refine(isValidDateKey, "Choose a valid report date."),
   summary: z.string().trim().min(10, "Describe today’s work in at least 10 characters.").max(5000),
   completedWork: z.string().trim().max(3000).transform((value) => value || undefined),
   progress: z.string().trim().max(3000).transform((value) => value || undefined),
@@ -116,7 +117,7 @@ export const dailyReportSchema = z.object({
 
 export const leaveTypes = ["CASUAL", "SICK", "EARNED", "UNPAID", "OTHER"] as const;
 export const leaveStatuses = ["PENDING", "APPROVED", "REJECTED", "CANCELLED"] as const;
-const dateKey = z.string().regex(/^\d{4}-\d{2}-\d{2}$/, "Choose a valid date.").refine((value) => !Number.isNaN(Date.parse(`${value}T00:00:00.000Z`)), "Choose a valid date.");
+const dateKey = z.string().refine(isValidDateKey, "Choose a valid date.");
 
 export const leaveRequestSchema = z.object({
   organizationId: z.string().min(1),
@@ -140,7 +141,7 @@ export const notificationFiltersSchema = z.object({
   category: z.enum(["TASK", "ATTENDANCE", "LEAVE", "REPORT", "SYSTEM"]).optional(),
   type: z.enum(["TASK_ASSIGNED", "TASK_UPDATED", "COMMENT_MENTION", "BREAK", "REPORT_DUE", "REPORT_REVIEWED", "REPORT_SUBMITTED", "LEAVE_REQUESTED", "LEAVE_UPDATED", "ATTENDANCE", "SYSTEM"]).optional(),
   read: z.enum(["UNREAD", "READ"]).optional(),
-  date: z.string().regex(/^\d{4}-\d{2}-\d{2}$/).optional(),
+  date: z.string().refine(isValidDateKey).optional(),
   page: z.coerce.number().int().min(1).max(10000).default(1),
 });
 

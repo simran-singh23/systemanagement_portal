@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { localHourBucket, reportingScheduleContext, scheduleContext, validClock, validTimeZone, workdayRangeUtc } from "@/lib/automation-schedule";
+import { automationPayloadSchema, localHourBucket, reportingScheduleContext, scheduleContext, validClock, validTimeZone, workdayRangeUtc } from "@/lib/automation-schedule";
 
 test("organization schedule uses its timezone instead of server time", () => {
   const now = new Date("2026-10-14T03:31:00.000Z");
@@ -33,4 +33,10 @@ test("hour buckets and configuration validators are stable", () => {
   assert.equal(validClock("24:00"), false);
   assert.equal(validTimeZone("Asia/Kolkata"), true);
   assert.equal(validTimeZone("Mars/Olympus"), false);
+});
+
+test("automation payload rejects impossible calendar dates", () => {
+  const valid = { organizationId: "org", automation: "DAILY_TEAM_SUMMARY", workDate: "2026-10-14", scheduledFor: "2026-10-14T18:00:00.000Z", runKey: "org:summary:2026-10-14" };
+  assert.equal(automationPayloadSchema.safeParse(valid).success, true);
+  assert.equal(automationPayloadSchema.safeParse({ ...valid, workDate: "2026-02-31" }).success, false);
 });

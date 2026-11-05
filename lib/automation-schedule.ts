@@ -1,10 +1,11 @@
 import { dateKeyInZone, parseClockMinutes, shiftDateKey, zonedDateTimeToUtc, zonedParts } from "@/lib/date-time";
+import { isValidDateKey } from "@/lib/date-time";
 import { z } from "zod";
 
 export const AUTOMATION_TYPES = ["CHECK_IN_REMINDER", "MISSING_CHECK_IN", "LUNCH_REMINDER", "TASK_DEADLINE", "DAILY_REPORT_REMINDER", "MISSING_DAILY_REPORT", "DAILY_TEAM_SUMMARY", "DAILY_EMAIL_REPORT"] as const;
 export type AutomationName = typeof AUTOMATION_TYPES[number];
 
-export const automationPayloadSchema = z.object({ organizationId: z.string().min(1), automation: z.enum(AUTOMATION_TYPES), workDate: z.string().regex(/^\d{4}-\d{2}-\d{2}$/), scheduledFor: z.iso.datetime(), runKey: z.string().min(1).max(300) });
+export const automationPayloadSchema = z.object({ organizationId: z.string().min(1), automation: z.enum(AUTOMATION_TYPES), workDate: z.string().refine(isValidDateKey), scheduledFor: z.iso.datetime(), runKey: z.string().min(1).max(300) });
 export type AutomationPayload = z.infer<typeof automationPayloadSchema>;
 
 export function validClock(value: string) { return /^([01]\d|2[0-3]):[0-5]\d$/.test(value); }

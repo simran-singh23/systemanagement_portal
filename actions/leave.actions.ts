@@ -4,7 +4,7 @@ import { revalidatePath } from "next/cache";
 import type { LeaveStatus, LeaveType, Prisma } from "@prisma/client";
 import { prisma } from "@/lib/prisma";
 import { requireCurrentOrganization, requireOrganizationPermission } from "@/lib/dal/auth";
-import { databaseDate, dateKeyInZone } from "@/lib/date-time";
+import { databaseDate, dateKeyInZone, isValidDateKey } from "@/lib/date-time";
 import { countWorkingLeaveDays, monthBounds, workingLeaveDateKeys } from "@/lib/leave";
 import { leaveCancelSchema, leaveDecisionSchema, leaveRequestSchema, type FormState } from "@/lib/validations";
 import { createNotification, createNotifications, getAuthorizedReviewerIds } from "@/lib/notifications";
@@ -95,6 +95,12 @@ async function reviewLeave(decision: "APPROVED" | "REJECTED", formData: FormData
       await lock(tx, `leave-request:${parsed.data.leaveRequestId}`);
       const request = await tx.leaveRequest.findFirst({ where: { id: parsed.data.leaveRequestId, organizationId: parsed.data.organizationId, ...teamLeadScope(effectiveRole, authorization.user.id) }, include: { user: { select: { name: true } } } });
       if (!request) throw new Error("NOT_FOUND");
+      // Serialize decisions and new requests for the same employee so two
+      // individually valid approvals cannot create an overlap concurrently.
+      // This key is also used by check-in and timer mutations, which makes an
+      // approval and a check-in resolve in one order instead of racing.
+      await lock(tx, request.userId);
+      await lock(tx, `leave:${request.organizationId}:${request.userId}`);
       if (request.userId === authorization.user.id) throw new Error("SELF_REVIEW");
       if (request.status !== "PENDING") throw new Error("INVALID_STATE");
       const startKey = request.startDate.toISOString().slice(0, 10);
@@ -102,7 +108,7 @@ async function reviewLeave(decision: "APPROVED" | "REJECTED", formData: FormData
       const policy = await policyData(tx, parsed.data.organizationId, startKey, endKey);
       const workingDates = workingLeaveDateKeys(startKey, endKey, policy);
       if (!policy.allowOverlaps && decision === "APPROVED") {
-        const conflict = await tx.leaveRequest.findFirst({ where: { id: { not: request.id }, organizationId: request.organizationId, userId: request.userId, status: "APPROVED", startDate: { lte: request.endDate }, endDate: { gte: request.startDate } }, select: { id: true } });
+        const conflict = await tx.leaveRequest.findFirst({ where: { id: { not: request.id }, organizationId: request.organizationId, userId: request.userId, status: { in: ["PENDING", "APPROVED"] }, startDate: { lte: request.endDate }, endDate: { gte: request.startDate } }, select: { id: true } });
         if (conflict) throw new Error("OVERLAPPING_LEAVE");
       }
       let hasAttendanceConflict = false;
@@ -146,7 +152,9 @@ export async function getMyLeaveRequests() {
 export async function getManagerLeaveRequests(organizationId: string, filters?: { q?: string; teamId?: string; employeeId?: string; status?: LeaveStatus; type?: LeaveType; from?: string; to?: string; page?: number; pageSize?: number; sort?: string }) {
   const authorization = await requireOrganizationPermission(organizationId, "leave:review");
   const role = authorization.membership?.role ?? authorization.user.role;
-  const where: Prisma.LeaveRequestWhereInput = { organizationId, AND: [teamLeadScope(role, authorization.user.id), filters?.q ? { OR: [{ user: { name: { contains: filters.q, mode: "insensitive" } } }, { user: { email: { contains: filters.q, mode: "insensitive" } } }] } : {}, filters?.teamId ? { user: { teamMembers: { some: { teamId: filters.teamId } } } } : {}], ...(filters?.employeeId ? { userId: filters.employeeId } : {}), ...(filters?.status ? { status: filters.status } : {}), ...(filters?.type ? { type: filters.type } : {}), ...(filters?.from || filters?.to ? { startDate: { ...(filters.from ? { gte: databaseDate(filters.from) } : {}), ...(filters.to ? { lte: databaseDate(filters.to) } : {}) } } : {}) };
+  const from = filters?.from && isValidDateKey(filters.from) ? filters.from : undefined;
+  const to = filters?.to && isValidDateKey(filters.to) ? filters.to : undefined;
+  const where: Prisma.LeaveRequestWhereInput = { organizationId, AND: [teamLeadScope(role, authorization.user.id), filters?.q ? { OR: [{ user: { name: { contains: filters.q, mode: "insensitive" } } }, { user: { email: { contains: filters.q, mode: "insensitive" } } }] } : {}, filters?.teamId ? { user: { teamMembers: { some: { teamId: filters.teamId } } } } : {}], ...(filters?.employeeId ? { userId: filters.employeeId } : {}), ...(filters?.status ? { status: filters.status } : {}), ...(filters?.type ? { type: filters.type } : {}), ...(from || to ? { startDate: { ...(from ? { gte: databaseDate(from) } : {}), ...(to ? { lte: databaseDate(to) } : {}) } } : {}) };
   const page = Math.max(1, filters?.page ?? 1);
   const pageSize = [10, 20, 50].includes(filters?.pageSize ?? 20) ? filters?.pageSize ?? 20 : 20;
   const sort = allowedValue(filters?.sort, ["newest", "oldest", "start_asc", "start_desc", "status"] as const) ?? "newest";
@@ -176,8 +184,10 @@ export async function getLeaveSummary(organizationId: string) {
   const role = authorization.membership?.role ?? authorization.user.role;
   const scope = teamLeadScope(role, authorization.user.id);
   const now = new Date();
-  const monthStart = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), 1));
-  const today = databaseDate(now.toISOString().slice(0, 10));
+  const settings = await prisma.organizationSettings.findUnique({ where: { organizationId }, select: { timezone: true } });
+  const todayKey = dateKeyInZone(now, settings?.timezone ?? "Asia/Kolkata");
+  const monthStart = databaseDate(`${todayKey.slice(0, 7)}-01`);
+  const today = databaseDate(todayKey);
   const [pending, approvedThisMonth, rejectedThisMonth, currentlyOnLeave, upcoming] = await Promise.all([
     prisma.leaveRequest.count({ where: { organizationId, status: "PENDING", ...scope } }),
     prisma.leaveRequest.count({ where: { organizationId, status: "APPROVED", reviewedAt: { gte: monthStart }, ...scope } }),

@@ -7,7 +7,7 @@ import { formatTaskDate, isOverdue, PriorityBadge, StatusBadge } from "@/compone
 import { Icon } from "@/components/ui/icons";
 import { ActiveTaskTimer } from "@/components/time-tracking/active-task-timer";
 import { requireCurrentOrganization } from "@/lib/dal/auth";
-import { dateKeyInZone } from "@/lib/date-time";
+import { dateKeyInZone, isValidDateKey } from "@/lib/date-time";
 import { prisma } from "@/lib/prisma";
 import { taskDetailsData, taskDetailsInclude } from "@/lib/task-details";
 import { taskDeadlineWindows } from "@/lib/task-deadlines";
@@ -35,7 +35,7 @@ export default async function EmployeeTasksPage({ searchParams }: { searchParams
   const activeTask = runningSession ? { id: runningSession.task!.id, title: runningSession.task!.title, activeStartedAt: runningSession.startedAt, actualMs: runningSession.task!.workSessions.reduce((sum, session) => sum + Math.max(0, (session.endedAt ?? now).getTime() - session.startedAt.getTime()), 0) } : taskRows.find((task) => task.activeStartedAt) ?? null;
   const todayKey = dateKeyInZone(now, settings?.timezone ?? "Asia/Kolkata");
   const deadlineWindows = taskDeadlineWindows(now, settings?.timezone ?? "Asia/Kolkata");
-  const historyDate = filters.historyDate && /^\d{4}-\d{2}-\d{2}$/.test(filters.historyDate) ? filters.historyDate : todayKey;
+  const historyDate = filters.historyDate && isValidDateKey(filters.historyDate) ? filters.historyDate : todayKey;
   const todayTrackedMs = tasks.flatMap((task) => task.workSessions).filter((session) => session.attendance.attendanceDate.toISOString().slice(0, 10) === todayKey).reduce((sum, session) => sum + Math.max(0, (session.endedAt ?? now).getTime() - session.startedAt.getTime()), 0);
   const sessionHistory = historySessions.filter((session) => session.attendance.attendanceDate.toISOString().slice(0, 10) === historyDate).map((session) => ({ ...session, taskTitle: session.task?.title ?? "Archived task" }));
   const today = taskRows.filter((task) => task.status !== "COMPLETED" && task.dueAt && task.dueAt < deadlineWindows.today.end);

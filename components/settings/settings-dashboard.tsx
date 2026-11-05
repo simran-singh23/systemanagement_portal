@@ -112,7 +112,6 @@ export function SettingsDashboard({ organization, settings, holidays, recipients
 
           <Panel visible={active === "attendance"} eyebrow="Presence rules" title="Attendance policies" description="Late and half-day thresholds are evaluated in the organization timezone.">
             <div className="grid gap-4 sm:grid-cols-2"><Field label="Half-day threshold" hint="Minutes worked before HALF_DAY applies"><input className={control} type="number" name="halfDayThresholdMins" min="30" max="720" step="15" defaultValue={settings.halfDayThresholdMins} /></Field><Field label="Absence finalization time"><input className={control} type="time" name="absenceFinalizationTime" defaultValue={settings.absenceFinalizationTime} /></Field></div>
-            <input type="hidden" name="autoFinalizeAbsence" value={settings.autoFinalizeAbsence ? "on" : ""} /><input type="hidden" name="allowAttendanceCorrections" value={settings.allowAttendanceCorrections ? "on" : ""} /><input type="hidden" name="requireCorrectionApproval" value={settings.requireCorrectionApproval ? "on" : ""} />
             <CapabilityNotice title="Correction workflow not enabled">Manual attendance correction and automatic absence finalization remain off until a reviewed correction workflow is implemented. The current setting is preserved and cannot be changed from this screen.</CapabilityNotice>
           </Panel>
 
@@ -126,7 +125,7 @@ export function SettingsDashboard({ organization, settings, holidays, recipients
             <OptionChecks name="availableLeaveTypes" title="Available leave types" values={ALL_LEAVE_TYPES} selected={settings.availableLeaveTypes} />
             <div className="grid gap-4 sm:grid-cols-2"><Field label="Minimum advance notice (days)"><input className={control} type="number" name="leaveAdvanceNoticeDays" min="0" max="365" defaultValue={settings.leaveAdvanceNoticeDays} /></Field></div>
             <div className="grid gap-3 sm:grid-cols-2"><Toggle name="allowPastDateLeaveRequests" label="Past-date requests" description="Allow employees to submit leave starting before today." checked={settings.allowPastDateLeaveRequests} /><Toggle name="allowOverlappingLeaveRequests" label="Overlapping requests" description="Allow a user to submit overlapping pending or approved leave." checked={settings.allowOverlappingLeaveRequests} /></div>
-            <input type="hidden" name="requireLeaveApproval" value="on" /><CapabilityNotice title="Manager approval remains required">Automatic leave approval is not exposed because attendance projection and conflict review require an accountable manager decision.</CapabilityNotice>
+            <CapabilityNotice title="Manager approval remains required">Automatic leave approval is not exposed because attendance projection and conflict review require an accountable manager decision.</CapabilityNotice>
           </Panel>
 
           <Panel visible={active === "reports"} eyebrow="Daily reporting" title="Daily report policies" description="Configure submission requirements and employee editing rules.">

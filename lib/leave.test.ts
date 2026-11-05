@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { countWorkingLeaveDays, dateKeysBetween, workingLeaveDateKeys } from "@/lib/leave";
+import { countWorkingLeaveDays, dateKeysBetween, monthBounds, workingLeaveDateKeys } from "@/lib/leave";
 import { leaveRequestSchema } from "@/lib/validations";
 
 test("date range includes same-day and both boundaries", () => {
@@ -26,4 +26,11 @@ test("leave validation rejects reversed date ranges", () => {
 test("same-day leave request passes validation", () => {
   const result = leaveRequestSchema.safeParse({ organizationId: "org", type: "SICK", startDate: "2026-10-14", endDate: "2026-10-14", reason: "Medical appointment and recovery.", notes: "" });
   assert.equal(result.success, true);
+});
+
+test("invalid month filters fall back instead of normalizing into another year", () => {
+  const valid = monthBounds("2026-02");
+  assert.equal(valid.start, "2026-02-01");
+  assert.equal(valid.end, "2026-02-28");
+  assert.notEqual(monthBounds("2026-99").month, "2026-99");
 });

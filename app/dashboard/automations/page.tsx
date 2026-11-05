@@ -2,6 +2,7 @@ import type { Metadata } from "next";
 import Link from "next/link";
 import type { AutomationStatus, AutomationType, Prisma } from "@prisma/client";
 import { requireCurrentOrganization } from "@/lib/dal/auth";
+import { databaseDate, isValidDateKey } from "@/lib/date-time";
 import { prisma } from "@/lib/prisma";
 
 export const metadata: Metadata = { title: "Automations" };
@@ -16,7 +17,7 @@ export default async function AutomationsPage({ searchParams }: { searchParams: 
   const automation = automationTypes.includes(filters.automation as AutomationType) ? filters.automation as AutomationType : undefined;
   const status = statuses.includes(filters.status as AutomationStatus) ? filters.status as AutomationStatus : undefined;
   const page = Math.max(1, Number(filters.page) || 1);
-  const date = filters.date && /^\d{4}-\d{2}-\d{2}$/.test(filters.date) ? new Date(`${filters.date}T00:00:00.000Z`) : undefined;
+  const date = filters.date && isValidDateKey(filters.date) ? databaseDate(filters.date) : undefined;
   const where: Prisma.AutomationExecutionWhereInput = { organizationId: organization.id, ...(automation ? { automation } : {}), ...(status ? { status } : {}), ...(date ? { workDate: date } : {}) };
   const [settings, executions, count, summary] = await Promise.all([
     prisma.organizationSettings.findUnique({ where: { organizationId: organization.id } }),

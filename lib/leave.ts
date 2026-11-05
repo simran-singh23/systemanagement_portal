@@ -24,9 +24,11 @@ export function countWorkingLeaveDays(startDateKey: string, endDateKey: string, 
 }
 
 export function monthBounds(month: string) {
-  const valid = /^\d{4}-\d{2}$/.test(month) ? month : new Date().toISOString().slice(0, 7);
+  const valid = isValidMonthKey(month) ? month : new Date().toISOString().slice(0, 7);
   const start = `${valid}-01`;
   const startDate = databaseDate(start);
   const endDate = new Date(Date.UTC(startDate.getUTCFullYear(), startDate.getUTCMonth() + 1, 0));
   return { month: valid, start, end: endDate.toISOString().slice(0, 10) };
 }
+
+export function isValidMonthKey(month: string) { return /^\d{4}-(0[1-9]|1[0-2])$/.test(month); }

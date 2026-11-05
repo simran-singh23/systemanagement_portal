@@ -1,8 +1,8 @@
 import { z } from "zod";
-import { dateKeyInZone, databaseDate, shiftDateKey } from "@/lib/date-time";
+import { dateKeyInZone, databaseDate, isValidDateKey, shiftDateKey } from "@/lib/date-time";
 import type { AnalyticsFilters } from "@/lib/analytics/types";
 
-const schema = z.object({ preset: z.enum(["today", "7d", "30d", "month", "custom"]).catch("30d"), start: z.string().regex(/^\d{4}-\d{2}-\d{2}$/).optional(), end: z.string().regex(/^\d{4}-\d{2}-\d{2}$/).optional(), team: z.string().max(100).optional(), department: z.string().max(100).optional(), employee: z.string().max(100).optional() });
+const schema = z.object({ preset: z.enum(["today", "7d", "30d", "month", "custom"]).catch("30d"), start: z.string().refine(isValidDateKey).optional(), end: z.string().refine(isValidDateKey).optional(), team: z.string().max(100).optional(), department: z.string().max(100).optional(), employee: z.string().max(100).optional() });
 export type AnalyticsSearch = Record<string, string | string[] | undefined>;
 
 export function parseAnalyticsFilters(raw: AnalyticsSearch, timezone: string): AnalyticsFilters {
