@@ -2,7 +2,41 @@
 
 Updated 6 November 2026.
 
-The **local launch-readiness pass is complete**. Next, plan the hosting target, deployment environment and preview verification. The user deferred deployment until after local fixes. See [Local launch review](docs/LOCAL_LAUNCH_REVIEW.md) for the four launch essentials, recorded checks and the infrastructure handoff. Optional features below are separate scope decisions.
+The **local launch-readiness pass is complete** and was pushed to `main` in `5370c5b`. The agreed hosting direction is **Vercel for the frontend and AWS for a separate backend**. The project currently runs its server logic inside Next.js, so API extraction and deployment setup are the next implementation work. The intended AWS account will be selected during deployment planning. See [Local launch review](docs/LOCAL_LAUNCH_REVIEW.md) for the completed local checks.
+
+## Remaining work for the agreed Vercel/AWS deployment
+
+The goal is a small portfolio showcase using fictional data. The local preview runs at `http://localhost:3100` with verified admin, manager and employee sign-ins. Demo credentials stay in the Git-ignored local environment file.
+
+- [ ] **Define the API boundary.** Inventory the mutations in `actions/`, database-backed Server Components and queries in `lib/`. Define backend endpoints for employees, teams, tasks, attendance, timers, breaks, leave, reports, analytics, search and notifications. Preserve the existing validation, transaction locks and organization permissions.
+- [ ] **Separate authentication and backend access.** Decide where authentication and sessions are owned, then implement the frontend-to-API session flow. Verify login/logout, invitation and password recovery when enabled, suspended-account denial and role routing. Each backend endpoint must enforce its own user, role and organization scope. Configure a same-origin proxy or explicitly restricted cross-origin access to match the chosen session design.
+- [ ] **Extract the backend and connect the frontend.** Move business operations and Prisma database access into the AWS backend. Update Next.js pages and Server Actions to use the API. Package the Node.js backend and its native dependencies for the selected AWS runtime. Keep the existing workflows covered by the regression suite throughout the change.
+- [ ] **Select the AWS services and check costs.** Lambda with API Gateway is the proposed API target, and RDS PostgreSQL is the proposed database. Confirm those choices against the intended account's current eligibility, credits and ongoing cost. Choose a compatible PostgreSQL alternative if required by the showcase budget. Configure spending alerts before provisioning resources.
+- [ ] **Prepare deployment configuration.** Create the Vercel project, API endpoint and dedicated database. Configure authentication URLs, API routing, database connections, secrets, least-privilege AWS access and HTTPS. Align environment validation and visible controls with the integrations enabled for the demo.
+- [ ] **Prepare hosted demo data.** Apply the migrations to the intended fresh database and implement a production-safe initializer for fictional records and demo accounts. The development seed refuses production mode. Agree how demo access and data reset will work, and keep passwords and provider keys out of Git.
+- [ ] **Configure recovery and operations.** Establish database backup retention, a restore procedure, application/API logs, failure visibility and a rollback procedure. Review migration history before upgrading any existing database, or record the decision to start from a fresh demo database.
+- [ ] **Verify the split deployment.** Deploy a preview and repeat the employee and manager workday, team/account management, leave decisions, report review, analytics/CSV, search and notifications. Recheck desktop/mobile usability, cookies, direct links and forged cross-organization requests against the AWS API. Record the deployed revision and results before publishing the portfolio link.
+
+Backend extraction and the AWS/Vercel deployment are pending. The local full-stack preview remains the verified implementation baseline.
+
+## Items 9–18 from the original 18-point plan
+
+These are the ten items that were outstanding after Reports and Team Pulse. Items 9–11 subsequently passed local verification during the launch-readiness pass. The table preserves all ten original items and records what remains for each. Optional features need a release-scope decision.
+
+| Original item | Current status | Remaining work |
+| --- | --- | --- |
+| **9. Analytics and CSV** | Local verification passed | Repeat known-fixture totals, filters, pagination, empty results, CSV escaping and employee/team/organization access checks after API extraction and on preview. |
+| **10. Search and notifications** | Local verification passed | Repeat authorized results and destinations, reassigned/archived task access, unread counts, pagination and mark-read actions across the split deployment. |
+| **11. Authenticated UI** | Local verification passed | Recheck the deployed employee and manager screens on desktop/mobile, keyboard focus, loading/empty/error states and the complete check-in-to-report-review workflow. |
+| **12. Private attachments** | Optional scope decision | If included, implement private storage, authorized upload/download/deletion, size/type validation and retention. Current attachments contain metadata and external links. |
+| **13. Audit browsing** | Optional scope decision | If included, implement authorized event browsing, filters and export with tested organization/team boundaries. Audit events are already recorded. |
+| **14. AI and search limiting** | Scope and hosting decision | Decide whether AI is included. Verify its disabled behavior or configured access and limits. Assess shared search rate limiting for the selected multi-instance/serverless backend. |
+| **15. Google OAuth** | Live verification pending if offered | Configure the intended OAuth application and callback URLs. Test account matching, suspended users, logout, session expiry/revocation and deployed cookies. Password sign-in already passes locally. |
+| **16. Resend and Inngest** | Live verification pending if enabled | Configure approved sender/recipients and hosted job credentials. Verify actual email delivery, signed webhooks, retries, job discovery and schedules. Decide how invitation/recovery works if email is deferred. |
+| **17. Database upgrade** | Fresh migrations and local restore passed. Existing installations pending | For retained data, compare the actual ledger/checksums and schema, then rehearse migration and restore on an isolated copy. For a fresh showcase database, record that decision and verify migration plus demo initialization. |
+| **18. Preview and release** | Pending deployment | Validate actual environment values, dependency status, hosted role workflows, backup/restore, logs, cost controls and rollback. Record optional deferrals and final release acceptance. |
+
+The source acceptance criteria remain in [the implementation checklist](tasks/todo.md). The immediate next step is to define and implement the backend API boundary for the agreed deployment split.
 
 ## 1. Current baseline — already completed
 - Local setup supports separate development/test databases, consistent environment loading, demo password login, migrations and seeding.
