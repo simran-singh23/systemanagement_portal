@@ -31,7 +31,8 @@ const initialState: FormState = {};
 
 export function EmployeeForm({ organizationId, actorRole, teams, initial }: EmployeeFormProps) {
   const action = initial ? updateEmployee.bind(null, initial.id) : createEmployee;
-  const [state, formAction] = useActionState(action, initialState);
+  const [result, formAction, pending] = useActionState(action, initialState);
+  const state = pending ? initialState : result;
   const roles = actorRole === "SUPER_ADMIN"
     ? ["PRODUCT_MANAGER", "TEAM_LEAD", "EMPLOYEE"] as const
     : ["TEAM_LEAD", "EMPLOYEE"] as const;

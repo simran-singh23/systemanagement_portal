@@ -20,7 +20,7 @@ test("email delivery, signed webhooks and office automations", {
   const { prisma } = await import("../../lib/prisma");
   const { deliverDailyEmail } = await import("../../lib/email/delivery");
   const { POST } = await import("../../app/api/webhooks/resend/route");
-  const { executeAutomation } = await import("../../lib/automation");
+  const { buildDueAutomationEvents, executeAutomation } = await import("../../lib/automation");
   const { reportRecipientWhere } = await import("../../lib/email/recipients");
 
   type ProviderBody = { from: string; to: string[]; subject: string; html: string; text: string; tags: Array<{ name: string; value: string }> };
@@ -259,6 +259,32 @@ test("email delivery, signed webhooks and office automations", {
         assert.equal(result.reason, "recipient_authorization_changed");
         assert.equal(calls.length, 0);
       } finally { await f.clean(); await prisma.user.delete({ where: { id: foreign.id } }); }
+    });
+
+    await context.test("the scheduler reads overnight policy, report requirements and holidays from storage", async () => {
+      const f = await fixture();
+      try {
+        await prisma.organizationSettings.update({
+          where: { organizationId: f.organization.id },
+          data: {
+            timezone: "Asia/Kolkata", workdayStart: "22:00", workdayEnd: "06:00", overnightShiftEnabled: true,
+            checkInReminderTime: "21:30", checkInCutoffTime: "02:00",
+            dailyReportReminderTime: "01:00", dailyReportDueTime: "02:00", requireDailyReports: false, dailyEmailEnabled: false,
+          },
+        });
+        const { events } = await buildDueAutomationEvents(new Date("2026-10-30T21:00:00.000Z"));
+        const scoped = events.filter((event) => event.organizationId === f.organization.id);
+        assert.ok(!scoped.some((event) => event.automation === "DAILY_REPORT_REMINDER" || event.automation === "MISSING_DAILY_REPORT"));
+        const cutoff = scoped.find((event) => event.automation === "MISSING_CHECK_IN");
+        assert.ok(cutoff);
+        assert.equal(cutoff.workDate, workDate);
+        assert.equal(cutoff.scheduledFor, "2026-10-30T20:30:00.000Z");
+        await prisma.organizationHoliday.create({ data: { organizationId: f.organization.id, holidayDate: new Date(workDate), name: "Holiday" } });
+        const run = await executeAutomation(cutoff);
+        assert.equal(run.status, "SKIPPED");
+        assert.deepEqual(run.metadata, { reason: "organization_holiday" });
+        assert.equal(await prisma.notification.count({ where: { organizationId: f.organization.id } }), 0);
+      } finally { await f.clean(); }
     });
 
     await context.test("reminders exclude suspended accounts and duplicate execution does not duplicate notifications", async () => {

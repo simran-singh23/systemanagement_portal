@@ -24,6 +24,9 @@ test("automation schedules follow office and reporting order for standard and ov
   assert.match(validateAutomationScheduleOrder({ ...standard, workdayStart: "22:00", workdayEnd: "06:00", overnight: false }) ?? "", /overnight/i);
   const overnight = { ...standard, workdayStart: "22:00", workdayEnd: "06:00", overnight: true, checkInReminderTime: "22:00", checkInCutoffTime: "23:00", dailyReportReminderTime: "05:30", dailyReportDueTime: "07:00", managerSummaryTime: "08:00", dailyEmailTime: "19:00" };
   assert.equal(validateAutomationScheduleOrder(overnight), null);
+  assert.equal(validateAutomationScheduleOrder({ ...overnight, checkInReminderTime: "21:30" }), null);
+  assert.match(validateAutomationScheduleOrder({ ...overnight, checkInReminderTime: "02:00", checkInCutoffTime: "21:30" }) ?? "", /check-in cutoff/i);
+  assert.match(validateAutomationScheduleOrder({ ...standard, overnight: true, checkInCutoffTime: "08:30" }) ?? "", /check-in cutoff/i);
   assert.match(validateAutomationScheduleOrder({ ...overnight, dailyEmailTime: "07:30" }) ?? "", /daily email/i);
 });
 

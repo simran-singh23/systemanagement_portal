@@ -48,6 +48,10 @@ test.setTimeout(90_000);
 
 async function login(page: Page, email: string) {
   await page.goto("/login");
+  if (new URL(page.url()).pathname !== "/login") {
+    await page.getByRole("button", { name: "Sign out", exact: true }).first().click();
+    await expect(page).toHaveURL(/\/login(?:\?|$)/);
+  }
   await page.getByLabel("Work email").fill(email);
   await page.getByLabel("Password", { exact: true }).fill(password);
   await page.getByRole("button", { name: "Sign in", exact: true }).click();

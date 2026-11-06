@@ -5,7 +5,7 @@ import { prisma } from "@/lib/prisma";
 import { databaseDate, dayRangeInZone, shiftDateKey, zonedDateTimeToUtc } from "@/lib/date-time";
 import { workingSummary } from "@/lib/work-time";
 import { workdayRangeUtc } from "@/lib/automation-schedule";
-import { dateKeys, parseAnalyticsFilters, previousRange, type AnalyticsSearch } from "@/lib/analytics/filters";
+import { AnalyticsScopeError, dateKeys, parseAnalyticsFilters, previousRange, type AnalyticsSearch } from "@/lib/analytics/filters";
 import type { AnalyticsDashboardData, HoursTrend, Metric, TableRow } from "@/lib/analytics/types";
 
 type Actor = { id: string; role: UserRole };
@@ -22,10 +22,10 @@ export async function getAnalyticsDashboard(organizationId: string, actor: Actor
   const timezone = settings?.timezone ?? "Asia/Kolkata";
   const filters = parseAnalyticsFilters(raw, timezone);
   const allowedTeamIds = allTeams.map((team) => team.id);
-  if (filters.teamId && !allowedTeamIds.includes(filters.teamId)) throw new Error("The selected team is outside your analytics scope.");
+  if (filters.teamId && !allowedTeamIds.includes(filters.teamId)) throw new AnalyticsScopeError("The selected team is outside your analytics scope.");
   const teamScope = actor.role === "TEAM_LEAD" ? { teamMembers: { some: { teamId: { in: allowedTeamIds } } } } : {};
-  let members = await prisma.organizationMember.findMany({ where: { organizationId, status: "ACTIVE", role: { in: ["TEAM_LEAD", "EMPLOYEE"] }, user: { ...teamScope, ...(personal ? { id: actor.id } : {}), ...(filters.teamId ? { teamMembers: { some: { teamId: filters.teamId } } } : {}) }, ...(filters.department ? { department: filters.department } : {}), ...(filters.employeeId ? { userId: filters.employeeId } : {}) }, select: { userId: true, department: true, user: { select: { name: true, email: true, teamMembers: { where: { team: { organizationId } }, select: { team: { select: { id: true, name: true } } } } } } }, orderBy: { user: { name: "asc" } } });
-  if (filters.employeeId && !members.some((member) => member.userId === filters.employeeId)) throw new Error("The selected employee is outside your analytics scope.");
+  let members = await prisma.organizationMember.findMany({ where: { organizationId, status: "ACTIVE", role: { in: ["TEAM_LEAD", "EMPLOYEE"] }, user: { status: "ACTIVE", ...teamScope, ...(personal ? { id: actor.id } : {}), ...(filters.teamId ? { teamMembers: { some: { teamId: filters.teamId } } } : {}) }, ...(filters.department ? { department: filters.department } : {}), ...(filters.employeeId ? { userId: filters.employeeId } : {}) }, select: { userId: true, department: true, user: { select: { name: true, email: true, teamMembers: { where: { team: { organizationId } }, select: { team: { select: { id: true, name: true } } } } } } }, orderBy: { user: { name: "asc" } } });
+  if (filters.employeeId && !members.some((member) => member.userId === filters.employeeId)) throw new AnalyticsScopeError("The selected employee is outside your analytics scope.");
   if (personal && !members.length) members = await prisma.organizationMember.findMany({ where: { organizationId, userId: actor.id, status: "ACTIVE" }, select: { userId: true, department: true, user: { select: { name: true, email: true, teamMembers: { where: { team: { organizationId } }, select: { team: { select: { id: true, name: true } } } } } } } });
   const memberIds = members.map((member) => member.userId);
   const currentKeys = dateKeys(filters.start, filters.end); const previous = previousRange(filters.start, filters.end); const combinedStart = previous.start;
@@ -50,7 +50,7 @@ export async function getAnalyticsDashboard(organizationId: string, actor: Actor
   const sessionsWithDate = sessions.map((session) => ({ ...session, analyticsDate: attendanceDateById.get(session.attendanceId) ?? dateKey(session.startedAt, timezone) }));
   const reportMap = new Map(reports.map((item) => [`${item.userId}:${item.reportDate.toISOString().slice(0, 10)}`, item]));
   const sessionByUserDate = new Map<string, typeof sessions>();
-  for (const session of sessionsWithDate) { const key = `${session.userId}:${session.analyticsDate}`; const list = sessionByUserDate.get(key) ?? []; list.push(session); sessionByUserDate.set(key, list); }
+  for (const session of sessionsWithDate) { if (!session.taskId) continue; const key = `${session.userId}:${session.analyticsDate}`; const list = sessionByUserDate.get(key) ?? []; list.push(session); sessionByUserDate.set(key, list); }
   const leaveOn = (userId: string, key: string) => leaves.some((leave) => leave.userId === userId && leave.startDate.toISOString().slice(0, 10) <= key && leave.endDate.toISOString().slice(0, 10) >= key);
   const workingDay = (key: string) => (settings?.workDays ?? [1, 2, 3, 4, 5]).includes(databaseDate(key).getUTCDay()) && !holidaySet.has(key);
   const finalized = (key: string) => new Date() >= workdayRangeUtc(key, timezone, settings?.workdayStart ?? "09:00", settings?.workdayEnd ?? "18:00").end;
@@ -79,7 +79,7 @@ export async function getAnalyticsDashboard(organizationId: string, actor: Actor
   const detailTasks = [...new Map([...taskEvents, ...openTasks].map((task) => [task.id, task])).values()];
   const tables = buildTables(members, currentKeys, attendanceMap, reportMap, detailTasks, sessionByUserDate, expectedIds, timezone);
   for (const row of tables.attendance) row.leave = currentKeys.filter((key) => attendanceMap.get(`${row.id}:${key}`)?.status === "ON_LEAVE").length;
-  for (const row of tables.reports) { const validKeys = currentKeys.filter((key) => expectedIds(key).includes(row.id)); const submitted = validKeys.filter((key) => { const report = reportMap.get(`${row.id}:${key}`); return report?.status === "SUBMITTED" || report?.status === "REVIEWED"; }).length; row.expected = validKeys.length; row.submitted = submitted; row.drafts = validKeys.filter((key) => reportMap.get(`${row.id}:${key}`)?.status === "DRAFT").length; row.missing = Math.max(0, validKeys.length - submitted); }
+  for (const row of tables.reports) { const validKeys = settings?.requireDailyReports === false ? [] : currentKeys.filter((key) => expectedIds(key).includes(row.id)); const submitted = validKeys.filter((key) => { const report = reportMap.get(`${row.id}:${key}`); return report?.status === "SUBMITTED" || report?.status === "REVIEWED"; }).length; row.expected = validKeys.length; row.submitted = submitted; row.drafts = validKeys.filter((key) => reportMap.get(`${row.id}:${key}`)?.status === "DRAFT").length; row.missing = Math.max(0, validKeys.length - submitted); }
   const workloadSource = actor.role === "TEAM_LEAD" || filters.teamId ? allTeams.filter((team) => !filters.teamId || team.id === filters.teamId) : [...allTeams, { id: "unassigned", name: "Unassigned" }];
   const workload = workloadSource.map((team) => { const rows = currentTasks.filter((task) => team.id === "unassigned" ? !task.teamId : task.teamId === team.id); const estimated = rows.filter((task) => task.status !== "COMPLETED" && task.estimatedMins != null); return { name: team.name, open: rows.filter((task) => !["COMPLETED", "CANCELLED"].includes(task.status)).length, inProgress: rows.filter((task) => task.status === "IN_PROGRESS").length, blocked: rows.filter((task) => task.status === "BLOCKED").length, estimatedHours: estimated.length ? round(estimated.reduce((sum, task) => sum + (task.estimatedMins ?? 0), 0) / 60) : null }; }).filter((row) => row.open || row.inProgress || row.blocked);
   const statusMap = new Map(statusCounts.map((item) => [item.status, item._count._all]));

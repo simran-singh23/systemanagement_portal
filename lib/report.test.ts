@@ -35,7 +35,7 @@ test("calendar date validation rejects normalized impossible dates and accepts l
 
 test("report evidence clips task time and excludes present-day tasks from history", () => {
   const attendance = { startedAt: new Date("2026-10-14T09:00:00Z"), endedAt: new Date("2026-10-14T10:00:00Z") };
-  const task = { id: "task-1", title: "Evidence", status: "IN_PROGRESS" };
+  const task = { id: "task-1", title: "Evidence", status: "IN_PROGRESS" } as const;
   const evidence = buildReportTaskEvidence({
     sessions: [
       { taskId: task.id, task, startedAt: new Date("2026-10-14T08:30:00Z"), endedAt: new Date("2026-10-14T10:30:00Z") },

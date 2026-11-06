@@ -94,13 +94,13 @@ async function synchronizeTeamLeadRoles(
   const changedUsers = new Set([previousManagerId, managerId].filter((id): id is string => Boolean(id)));
   if (!changedUsers.size) return;
   const memberships = await tx.organizationMember.findMany({
-    where: { organizationId, userId: { in: [...changedUsers] }, status: "ACTIVE" },
-    select: { userId: true, role: true },
+    where: { organizationId, userId: { in: [...changedUsers] } },
+    select: { userId: true, role: true, status: true },
   });
   for (const userId of changedUsers) {
     const membership = memberships.find((candidate) => candidate.userId === userId);
     if (userId === managerId) {
-      if (membership?.role === "EMPLOYEE") {
+      if (membership?.role === "EMPLOYEE" && membership.status === "ACTIVE") {
         await tx.organizationMember.update({ where: { organizationId_userId: { organizationId, userId } }, data: { role: "TEAM_LEAD" } });
         await reconcileAccountAccess(tx, userId);
       }
@@ -203,7 +203,7 @@ export async function updateTeam(
       };
       const updated = await tx.team.updateMany({
         where: allowedWhere,
-        data: { name: parsed.data.name, description: parsed.data.description, color: parsed.data.color, managerId: parsed.data.managerId ?? null },
+        data: { name: parsed.data.name, description: parsed.data.description ?? null, color: parsed.data.color, managerId: parsed.data.managerId ?? null },
       });
       if (updated.count !== 1) throw new TeamInputError("Team permissions or leadership changed. Refresh the page and try again.");
 

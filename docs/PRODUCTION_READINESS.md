@@ -1,3 +1,5 @@
+Current local verification is recorded in [Local launch review](LOCAL_LAUNCH_REVIEW.md), updated 6 November 2026. The assessment below is historical.
+
 # TeamFlow production readiness report
 
 Assessment date: 2026-10-23  

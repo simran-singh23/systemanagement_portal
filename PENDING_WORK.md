@@ -1,8 +1,8 @@
 # TeamFlow — pending work and intern handoff
 
-Updated: 31 October 2026. Owner of the next development batches: Simran.
+Updated 6 November 2026.
 
-Start with **Teams**, then **Employee Management**. These sections already have implementation code; verify their real workflows and fix failures before adding more features. Work one batch at a time and keep the existing backend/task regressions passing.
+The **local launch-readiness pass is complete**. Next, plan the hosting target, deployment environment and preview verification. The user deferred deployment until after local fixes. See [Local launch review](docs/LOCAL_LAUNCH_REVIEW.md) for the four launch essentials, recorded checks and the infrastructure handoff. Optional features below are separate scope decisions.
 
 ## 1. Current baseline — already completed
 - Local setup supports separate development/test databases, consistent environment loading, demo password login, migrations and seeding.
@@ -10,7 +10,8 @@ Start with **Teams**, then **Employee Management**. These sections already have 
 - Password login and role routing, the employee workday, leave approval, and deactivation closing sessions have automated coverage.
 - Tasks now cover creation/editing, organization-timezone dates, assignment, discussion, pointer/keyboard Kanban moves, stale-edit protection, archive feedback and timer restrictions/order/queue selection.
 - Email retry requests are saved before sending. Duplicate/concurrent sends, retries, early/out-of-order signed webhooks and terminal provider failures have local regression coverage.
-- Latest verified baseline: **113 unit tests**, **18 database/email/automation checks** (20 reported tests including their parent groups), and **29 browser tests** passed. Two older storage-state-based browser smoke tests remain skipped. Lint, TypeScript, Prisma validation and production build passed.
+- Latest local verification passed **128 unit tests**, **21 integration checks**, **65 development-server browser tests** and **18 production-build browser checks** with no skips. Lint, typecheck, Prisma validation and the production build also passed. The runtime dependency audit reported zero vulnerabilities.
+- A disposable local backup/restore rehearsal verified 32 tables, row values, schema, migration checksums, restored password/membership data and safe migration retry. Hosted backup policy and any existing database upgrade remain part of deployment planning.
 
 These results use isolated local databases, fake email credentials and intercepted provider calls. They do not establish that Google OAuth, real Resend delivery, hosted Inngest jobs or a production deployment work.
 
@@ -44,13 +45,11 @@ The historical file `prisma/migrations/20261014233000_daily_email_reporting/migr
 
 Code to inspect: `actions/team.actions.ts`, `components/people/team-form.tsx`, and `app/dashboard/teams/`.
 
-- [ ] Verify team creation and editing by an administrator/product manager; names, description, color, leadership and membership must persist after reload.
-- [ ] Verify duplicate names, invalid members and inactive/suspended users produce useful validation feedback without partial writes.
-- [ ] Verify changing a team lead and adding/removing members keeps team membership, task-assignment options and permissions consistent.
-- [ ] Verify a team lead can edit only their managed team and cannot change leadership or reach another team's settings through a modified request.
-- [ ] Verify users/teams from another organization cannot be selected or submitted through forged IDs.
-- [ ] Check what happens to existing assigned tasks and active timers when membership or leadership changes; preserve work history and make the intended behavior explicit.
-- [ ] Add fixture-based manager/team-lead browser tests and check the database records, audit events and feedback.
+- [x] Verified team creation and edits with a product manager and owner, including saved color, leadership, roster and clearing a description.
+- [x] Verified rejection of duplicate names, inactive members and forged cross-organization members without partial writes.
+- [x] Verified permitted team-lead edits, denial of another team's settings and rejection of a forged leadership change.
+- [x] Verified that roster changes update assignment options while preserving existing task assignments and active timers.
+- [x] Verified database records and audit events in fixture-based browser tests. Replacing a suspended lead removes their former leadership role when they lead no other team, and their membership stays suspended.
 
 Done when the ordinary workflow, invalid inputs and access restrictions pass through the actual UI/server actions and remain correct after reload.
 
@@ -58,14 +57,13 @@ Done when the ordinary workflow, invalid inputs and access restrictions pass thr
 
 Code to inspect: `actions/employee.actions.ts`, `actions/password.actions.ts`, `lib/password-account.ts`, `actions/team.actions.ts`, `components/people/employee-form.tsx`, `app/dashboard/employees/`, and `app/account/security/`.
 
-- [ ] Verify inviting a new employee, normalized/duplicate email handling, team/department assignment and the initial invited status.
-- [ ] Complete the invitation → one-time password setup → sign-in flow. Test expired/consumed links and repeated submissions. Local development can print setup links in the terminal when Resend is not configured.
-- [ ] Verify profile edits, role/team changes and reactivation. Deactivation/session closure already has coverage; extend it to the rest of the lifecycle.
-- [ ] Verify employee, team-lead, product-manager and administrator permissions on each mutation, including direct/modified requests and cross-organization IDs.
-- [ ] Verify password change/reset, old-password rejection and invalidation of existing sessions.
-- [ ] Test users with multiple organization memberships: changing one membership must not remove or grant access in another organization. Names/job titles are currently global user fields; decide the desired product behavior before changing that model.
-- [ ] Check feedback after repeated timer, break and account actions so an earlier result is not shown as the latest result. This is a follow-up review item, not a verified remaining failure.
-- [ ] Add independent fixtures and database assertions for these flows. Do not rely only on hiding controls or on route-access smoke tests.
+- [x] Verified normalized invitations, duplicate handling, initial invited status and team and department placement.
+- [x] Completed invitation, password setup and sign-in with the actual link emitted by the local dev server. Fixture tests cover expired and consumed links and password reset/change, including old-password rejection and session invalidation.
+- [x] Verified profile saves, role and team changes, deactivation and reactivation. Profile-only saves preserve existing roster records. Blank job titles and departments clear saved values.
+- [x] Verified forged roles and organization IDs, and replayed an owner's save request as a team lead and employee to confirm neither could mutate the record.
+- [x] Verified that membership changes preserve access in the second organization. Repeated account saves show the current result, including during submission.
+- [ ] Names and job titles are still global user fields. Confirm the desired product behavior before changing that model.
+- [x] Verified that repeated check-in, timer and break actions show the latest result in the attendance batch.
 
 ## 5. Priority 2 — remaining section verification
 
@@ -73,13 +71,13 @@ These areas have existing code, but their complete manager/employee workflows st
 
 | Section | Work still needed | Starting files |
 | --- | --- | --- |
-| Reports and Team Pulse | Draft/edit/submit rules, blocked-pulse validation, locked/revised reports, correct calculated task/time evidence, manager/team visibility, missing-report behavior | `actions/report.actions.ts`, `lib/reports.ts`, `app/dashboard/reports/`, `app/employee/reports/` |
-| Leave | Rejection/cancellation, overlaps, notice rules, working days/holidays, attendance conflicts, team-lead restrictions and duplicate decisions; approval already has a core test | `actions/leave.actions.ts`, `lib/leave.ts`, leave pages/components |
-| Attendance and timers | Overnight shifts, previous open sessions, duplicate/concurrent requests, timezone boundaries, holidays/approved leave and repeated break cycles; the basic workday already passes | `actions/attendance.actions.ts`, `actions/work-timer.actions.ts`, `lib/date-time.ts`, `lib/work-time.ts` |
-| Analytics and CSV | Confirm displayed/exported values against known fixtures; filters, dates, pagination, empty states and employee/team/organization scope | `lib/analytics/`, `app/api/analytics/export/route.ts`, analytics pages |
-| Search and notifications | Search result/link permissions, pagination, unread counts, mark-read actions and reassigned/archived targets; verify the task links already repaired | `lib/search/`, `actions/notification.actions.ts`, `lib/notification-routing.ts`, `app/notifications/` |
-| Organization settings | Persistence, validation and actual enforcement of office, attendance, leave, report and automation policies; invalid calendar dates and overnight schedule combinations | `actions/settings.actions.ts`, `actions/automation.actions.ts`, `lib/organization-settings.ts`, `components/settings/` |
-| Authenticated UI | Loading/error/empty states, accessibility and desktop/mobile use for real employee/manager pages; existing multi-viewport checks cover the public login page | `app/dashboard/`, `app/employee/`, `components/` |
+| Reports and Team Pulse | Local verification complete. Covered drafts, blocked-pulse validation, submission and revision, scoped review and stale reviews, overnight evidence, missing submissions, holidays and team visibility. | `tests/e2e/reports.spec.ts`, `actions/report.actions.ts`, `lib/reports.ts` |
+| Leave | Local verification complete. Covered notice and working-day rules, cancellation and rejection, overlap policy, reviewer scope, replayed decisions and approval racing with check-in. | `tests/e2e/leave-decisions.spec.ts`, `tests/e2e/organization-settings.spec.ts` |
+| Attendance and timers | Local verification complete. Covered overnight work dates, older open sessions, duplicate check-ins, replayed stop requests, optional holidays, approved leave and repeated timer and break cycles. | `tests/e2e/attendance-timers.spec.ts`, `tests/e2e/organization-settings.spec.ts` |
+| Analytics and CSV | Local launch checks passed for known attendance/task time, displayed and exported totals, search/sort, pagination, empty results, CSV escaping and forged scope filters. | `tests/e2e/launch-readiness.spec.ts`, `lib/analytics/`, export route |
+| Search and notifications | Local launch checks passed for private task scope, task detail links, read filters, pagination, unread counts, mark-all and a forged mark-read request. Existing task regressions cover reassignment and archive access. | `tests/e2e/launch-readiness.spec.ts`, `tests/e2e/tasks.spec.ts` |
+| Organization settings | Local policy verification complete. Tested invalid dates and schedule order, draft retention, overnight attendance, allowed breaks, leave calendar rules, checkout before reports and local scheduler behavior. | `tests/e2e/organization-settings.spec.ts`, `lib/organization-settings.ts` |
+| Authenticated UI | Local launch checks passed on 17 employee/manager routes at 390px and 1440px. Main-content scans have no critical/serious WCAG A/AA violations. Verified mobile menu focus and actual workday/report review. Deployed checks follow hosting selection. | `tests/e2e/launch-readiness.spec.ts`, authenticated workflow specs |
 
 ## 6. Incomplete features and external-service work
 
@@ -90,7 +88,7 @@ These areas have existing code, but their complete manager/employee workflows st
 - [ ] **Inngest:** run the local dev server (`npm run inngest:dev`) and verify discovery, organization schedules, summaries/reminders, retries and execution history. Hosted endpoint sync/keys and production behavior are still unverified.
 - [ ] **Optional AI:** keep it disabled unless it is part of the agreed scope. If enabled, verify provider configuration, role/organization scope, limits, grounded outputs, retention and failure behavior. Do not add a key to source control.
 - [ ] **Serverless rate limiting:** search currently uses a process-local limiter. Decide whether distributed enforcement is needed for the deployment topology; authentication has its own database-backed limiter.
-- [ ] **Older smoke tests:** replace the two storage-state-dependent skipped checks with reliable fixture login, or document why they remain separate. Do not treat skipped tests as passed.
+- [x] **Older smoke tests:** replaced manual storage states with fixture login for the manager, owner and employee routes. Both smoke tests passed in the full local browser run on 6 November 2026.
 - [ ] **Release:** configure Preview/Production databases, backup/restore, domain/OAuth callbacks, provider keys and monitoring/alerts. Recheck dependency advisories and run the production environment validator. Local green checks are not production sign-off; use [DEPLOYMENT.md](DEPLOYMENT.md) after reconciling its older checklist with this handoff.
 
 ## 7. Workflow and completion checks

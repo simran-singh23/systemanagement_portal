@@ -14,7 +14,8 @@ const initialState: FormState = {};
 
 export function TeamForm({ organizationId, members, initial, canAssignLead = true }: { organizationId: string; members: MemberOption[]; initial?: TeamInitial; canAssignLead?: boolean }) {
   const action = initial ? updateTeam.bind(null, initial.id) : createTeam;
-  const [state, formAction] = useActionState(action, initialState);
+  const [result, formAction, pending] = useActionState(action, initialState);
+  const state = pending ? initialState : result;
 
   return (
     <form action={formAction} className="space-y-6">
@@ -25,7 +26,7 @@ export function TeamForm({ organizationId, members, initial, canAssignLead = tru
         <label className="text-sm font-medium text-[#344054]">Team name<input className={inputClass} name="name" required defaultValue={initial?.name} placeholder="Product Design" />{state.errors?.name && <span className="mt-1.5 block text-xs text-[#b42318]">{state.errors.name[0]}</span>}</label>
         <label className="text-sm font-medium text-[#344054]">Team color<input className={`${inputClass} px-2`} name="color" type="color" defaultValue={initial?.color ?? "#2563EB"} /></label>
       </div>
-      <label className="block text-sm font-medium text-[#344054]">Description<textarea name="description" rows={3} defaultValue={initial?.description} placeholder="What this team owns and how it works." className="mt-2 w-full resize-none rounded-xl border border-[#dfe4eb] bg-white px-3.5 py-3 text-sm text-[#253047] outline-none transition focus:border-[#80a7f5] focus:ring-4 focus:ring-[#eef4ff]" /></label>
+      <label className="block text-sm font-medium text-[#344054]">Description<textarea name="description" rows={3} maxLength={500} defaultValue={initial?.description} placeholder="What this team owns and how it works." className="mt-2 w-full resize-none rounded-xl border border-[#dfe4eb] bg-white px-3.5 py-3 text-sm text-[#253047] outline-none transition focus:border-[#80a7f5] focus:ring-4 focus:ring-[#eef4ff]" />{state.errors?.description && <span role="alert" className="mt-1.5 block text-xs text-[#b42318]">{state.errors.description[0]}</span>}</label>
       {canAssignLead ? <label className="block text-sm font-medium text-[#344054]">Team lead<select className={inputClass} name="managerId" defaultValue={initial?.managerId ?? ""}><option value="">No lead assigned</option>{members.map((member) => <option key={member.id} value={member.id}>{member.name} · {member.status === "ACTIVE" ? member.role.replaceAll("_", " ").toLowerCase() : "inactive — remove assignment to save"}</option>)}</select>{state.errors?.managerId && <span role="alert" className="mt-1.5 block text-xs text-[#b42318]">{state.errors.managerId[0]}</span>}</label> : <div><input type="hidden" name="managerId" value={initial?.managerId ?? ""} /><p className="text-sm font-medium text-[#344054]">Team lead</p><div className={`${inputClass} flex items-center bg-[#f5f7fa] text-[#667085]`}>{members.find((member) => member.id === initial?.managerId)?.name || "No lead assigned"}</div><p className="mt-1.5 text-xs text-[#98a2b3]">A product manager can change team leadership.</p>{state.errors?.managerId && <p role="alert" className="mt-1.5 text-xs text-[#b42318]">{state.errors.managerId[0]}</p>}</div>}
 
       <fieldset>

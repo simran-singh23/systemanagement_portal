@@ -10,6 +10,7 @@
     "lint": "eslint",
     "test": "npm run test:unit",
     "test:unit": "tsx --test lib/*.test.ts lib/**/*.test.ts tests/unit/*.test.ts",
+    "test:recovery": "tsx scripts/verify-local-recovery.ts",
     "test:migration:static": "tsx --test tests/unit/migration-target-guard.test.ts tests/unit/migration-catalog.test.ts",
     "test:integration": "NODE_ENV=test node --conditions=react-server --import tsx --test tests/integration/*.test.ts",
     "test:e2e": "playwright test",
@@ -50,7 +51,7 @@
     "recharts": "^3.10.1",
     "resend": "^6.34.1",
     "server-only": "0.0.1",
-    "zod": "^4.6.5"
+    "zod": "^4.6.7"
   },
   "devDependencies": {
     "@axe-core/playwright": "^4.14.0",
@@ -69,6 +70,12 @@
   },
   "overrides": {
     "deepmerge-ts": "8.0.2",
-    "mysql2": "3.24.4"
+    "mysql2": "3.24.4",
+    "inngest": {
+      "zod": "$zod"
+    },
+    "gcp-metadata": {
+      "gaxios": "7.1.4"
+    }
   }
 }

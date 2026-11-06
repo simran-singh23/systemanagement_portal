@@ -1,3 +1,4 @@
+import { employeeTeamOrder } from "@/lib/employee-policy";
 import type { Metadata } from "next";
 import Link from "next/link";
 import type { Prisma, UserRole } from "@prisma/client";
@@ -38,7 +39,7 @@ export default async function EmployeesPage({ searchParams }: { searchParams: Pr
   const [initialMembers, teams, departments, statusCounts, filteredCount] = await Promise.all([
     prisma.organizationMember.findMany({
       where,
-      include: { user: { include: { teamMembers: { where: { team: { organizationId: organization.id } }, include: { team: { select: { id: true, name: true, color: true } } }, orderBy: { joinedAt: "asc" } } } } },
+      include: { user: { include: { teamMembers: { where: { team: { organizationId: organization.id } }, include: { team: { select: { id: true, name: true, color: true } } }, orderBy: employeeTeamOrder } } } },
       orderBy, skip: pagination.skip, take: pagination.pageSize,
     }),
     prisma.team.findMany({ where: { organizationId: organization.id }, select: { id: true, name: true }, orderBy: { name: "asc" } }),
@@ -47,7 +48,7 @@ export default async function EmployeesPage({ searchParams }: { searchParams: Pr
     prisma.organizationMember.count({ where }),
   ]);
   const pageInfo = boundedPage(pagination.page, filteredCount, pagination.pageSize);
-  const members = pageInfo.page === pagination.page ? initialMembers : await prisma.organizationMember.findMany({ where, include: { user: { include: { teamMembers: { where: { team: { organizationId: organization.id } }, include: { team: { select: { id: true, name: true, color: true } } }, orderBy: { joinedAt: "asc" } } } } }, orderBy, skip: (pageInfo.page - 1) * pagination.pageSize, take: pagination.pageSize });
+  const members = pageInfo.page === pagination.page ? initialMembers : await prisma.organizationMember.findMany({ where, include: { user: { include: { teamMembers: { where: { team: { organizationId: organization.id } }, include: { team: { select: { id: true, name: true, color: true } } }, orderBy: employeeTeamOrder } } } }, orderBy, skip: (pageInfo.page - 1) * pagination.pageSize, take: pagination.pageSize });
   const counts = Object.fromEntries(statusCounts.map((item) => [item.status, item._count._all]));
   const total = statusCounts.reduce((sum, item) => sum + item._count._all, 0);
 
@@ -92,7 +93,7 @@ export default async function EmployeesPage({ searchParams }: { searchParams: Pr
 }
 
 function FilterSelect({ name, defaultValue, label, options }: { name: string; defaultValue?: string; label: string; options: [string, string][] }) {
-  return <select name={name} defaultValue={defaultValue || ""} className="h-11 min-w-0 rounded-xl border border-[#dfe4eb] bg-white px-3 text-sm text-[#475467] outline-none focus:border-[#80a7f5] focus:ring-4 focus:ring-[#eef4ff]"><option value="">{label}</option>{options.map(([value, text]) => <option key={value} value={value}>{text}</option>)}</select>;
+  return <select aria-label={label} name={name} defaultValue={defaultValue || ""} className="h-11 min-w-0 rounded-xl border border-[#dfe4eb] bg-white px-3 text-sm text-[#475467] outline-none focus:border-[#80a7f5] focus:ring-4 focus:ring-[#eef4ff]"><option value="">{label}</option>{options.map(([value, text]) => <option key={value} value={value}>{text}</option>)}</select>;
 }
 
 function EmployeeIdentity({ name, email }: { name: string | null; email: string }) {

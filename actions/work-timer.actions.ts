@@ -47,8 +47,6 @@ async function beginTimer(formData: FormData, event: "started" | "resumed"): Pro
   if (context.activeBreak) return { message: "End your active break before starting a task timer." };
   if (context.activeTask?.taskId === context.task.id) return { message: "This task timer is already running." };
   if (context.activeTask) return { message: "Pause the current task before starting another one." };
-  const now = new Date();
-
   try {
     await prisma.$transaction(async (tx) => {
       await lockUser(tx, context.authorization.user.id);
@@ -63,6 +61,7 @@ async function beginTimer(formData: FormData, event: "started" | "resumed"): Pro
         tx.workSession.findFirst({ where: { organizationId: parsed.data.organizationId, userId: context.authorization.user.id, taskId: { not: null }, endedAt: null }, select: { id: true } }),
       ]);
       if (!lockedOffice || lockedBreak || lockedTask) throw new Error("TIMER_STATE_CHANGED");
+      const now = new Date();
       await tx.workSession.create({ data: { organizationId: parsed.data.organizationId, attendanceId: lockedOffice.attendanceId, userId: context.authorization.user.id, taskId: context.task!.id, startedAt: now } });
       if (latestTask.status !== "IN_PROGRESS") {
         const last = await tx.task.aggregate({ where: { organizationId: parsed.data.organizationId, archivedAt: null, status: "IN_PROGRESS" }, _max: { position: true } });
@@ -77,8 +76,15 @@ async function beginTimer(formData: FormData, event: "started" | "resumed"): Pro
   return { success: true, message: event === "resumed" ? "Task timer resumed." : "Task timer started." };
 }
 
-export async function startTaskTimer(_state: FormState, formData: FormData) { return beginTimer(formData, "started"); }
-export async function resumeTaskTimer(_state: FormState, formData: FormData) { return beginTimer(formData, "resumed"); }
+export async function updateTaskTimer(_state: FormState, formData: FormData): Promise<FormState> {
+  switch (formData.get("operation")) {
+    case "start": return beginTimer(formData, "started");
+    case "resume": return beginTimer(formData, "resumed");
+    case "pause": return closeTimer(formData, false);
+    case "finish": return closeTimer(formData, true);
+    default: return { message: "Choose a valid task timer action." };
+  }
+}
 
 async function closeTimer(formData: FormData, finish: boolean): Promise<FormState> {
   const parsed = parseTimer(formData);
@@ -86,17 +92,17 @@ async function closeTimer(formData: FormData, finish: boolean): Promise<FormStat
   const authorization = await requireOrganizationPermission(parsed.data.organizationId, "tasks:update-own");
   const task = await prisma.task.findFirst({ where: { id: parsed.data.taskId, organizationId: parsed.data.organizationId, assignedToId: authorization.user.id, archivedAt: null }, select: { id: true, title: true, createdById: true } });
   if (!task) return { message: "This task is not assigned to you." };
-  const active = await prisma.workSession.findFirst({ where: { organizationId: parsed.data.organizationId, userId: authorization.user.id, taskId: task.id, endedAt: null }, select: { id: true, startedAt: true } });
-  if (!active) return { message: finish ? "Start or resume the task before finishing it." : "This task timer is not running." };
-  const now = new Date();
+  const sessionId = field(formData, "sessionId");
+  if (!sessionId) return { message: "The running task segment could not be verified." };
   try {
     await prisma.$transaction(async (tx) => {
       await lockUser(tx, authorization.user.id);
       await assertActiveOrganizationAccess(tx, parsed.data.organizationId, authorization.user.id, "tasks:update-own");
       await lockTransaction(tx, `task-board:${parsed.data.organizationId}`);
       await lockTask(tx, task.id, parsed.data.organizationId);
-      const locked = await tx.workSession.findFirst({ where: { id: active.id, endedAt: null }, select: { id: true, startedAt: true } });
+      const locked = await tx.workSession.findFirst({ where: { id: sessionId, taskId: task.id, organizationId: parsed.data.organizationId, userId: authorization.user.id, endedAt: null }, select: { id: true, startedAt: true } });
       if (!locked) throw new Error("TIMER_STATE_CHANGED");
+      const now = new Date();
       await tx.workSession.update({ where: { id: locked.id }, data: { endedAt: now, durationMins: durationMinutes(locked.startedAt, now) } });
       if (finish) {
         const last = await tx.task.aggregate({ where: { organizationId: parsed.data.organizationId, archivedAt: null, status: "COMPLETED" }, _max: { position: true } });
@@ -110,10 +116,15 @@ async function closeTimer(formData: FormData, finish: boolean): Promise<FormStat
   return { success: true, message: finish ? "Task finished and timer stopped." : "Task timer paused." };
 }
 
-export async function pauseTaskTimer(_state: FormState, formData: FormData) { return closeTimer(formData, false); }
-export async function stopTaskTimer(_state: FormState, formData: FormData) { return closeTimer(formData, true); }
+export async function updateBreakTimer(_state: FormState, formData: FormData): Promise<FormState> {
+  switch (formData.get("operation")) {
+    case "start": return startBreak(formData);
+    case "end": return endBreak(formData);
+    default: return { message: "Choose a valid break action." };
+  }
+}
 
-export async function startBreak(_state: FormState, formData: FormData): Promise<FormState> {
+async function startBreak(formData: FormData): Promise<FormState> {
   const parsed = breakActionSchema.safeParse({ organizationId: field(formData, "organizationId"), type: field(formData, "type") });
   if (!parsed.success) return { message: "Choose a valid break type." };
   const authorization = await requireOrganizationPermission(parsed.data.organizationId, "attendance:update-own");
@@ -125,7 +136,6 @@ export async function startBreak(_state: FormState, formData: FormData): Promise
   if (settings && !settings.allowedBreakTypes.includes(parsed.data.type)) return { message: "This break type is not allowed by your organization policy." };
   if (!officeSession) return { message: "Check in before starting a break." };
   if (activeBreak) return { message: "End your current break before starting another one." };
-  const now = new Date();
   try {
     await prisma.$transaction(async (tx) => {
       await lockUser(tx, authorization.user.id);
@@ -136,6 +146,7 @@ export async function startBreak(_state: FormState, formData: FormData): Promise
         tx.workSession.findFirst({ where: { organizationId: parsed.data.organizationId, userId: authorization.user.id, taskId: { not: null }, endedAt: null }, select: { id: true, taskId: true, startedAt: true } }),
       ]);
       if (!lockedOffice || lockedBreak) throw new Error("BREAK_STATE_CHANGED");
+      const now = new Date();
       if (lockedTask) {
         await tx.workSession.update({ where: { id: lockedTask.id }, data: { endedAt: now, durationMins: durationMinutes(lockedTask.startedAt, now) } });
         await tx.activityLog.create({ data: { organizationId: parsed.data.organizationId, actorId: authorization.user.id, action: "task.timer_paused", entityType: "task", entityId: lockedTask.taskId, metadata: { reason: "break_started" } } });
@@ -150,30 +161,32 @@ export async function startBreak(_state: FormState, formData: FormData): Promise
   return { success: true, message: `${parsed.data.type === "LUNCH" ? "Lunch" : "Break"} started. Any running task was paused.` };
 }
 
-export async function endBreak(_state: FormState, formData: FormData): Promise<FormState> {
+async function endBreak(formData: FormData): Promise<FormState> {
   const parsed = breakActionSchema.pick({ organizationId: true }).safeParse({ organizationId: field(formData, "organizationId") });
   if (!parsed.success) return { message: "Your organization could not be verified." };
   const authorization = await requireOrganizationPermission(parsed.data.organizationId, "attendance:update-own");
-  const [active, settings] = await Promise.all([
-    prisma.break.findFirst({ where: { organizationId: parsed.data.organizationId, userId: authorization.user.id, endedAt: null }, select: { id: true, type: true, startedAt: true } }),
-    prisma.organizationSettings.findUnique({ where: { organizationId: parsed.data.organizationId }, select: { maxBreakMins: true } }),
-  ]);
-  if (!active) return { message: "No active break was found." };
-  const now = new Date();
-  const elapsedMinutes = durationMinutes(active.startedAt, now);
-  const exceededPolicy = settings?.maxBreakMins != null && elapsedMinutes > settings.maxBreakMins;
+  const breakId = field(formData, "breakId");
+  if (!breakId) return { message: "The active break could not be verified." };
+  let exceededLimit: number | undefined;
   try {
     await prisma.$transaction(async (tx) => {
       await lockUser(tx, authorization.user.id);
       await assertActiveOrganizationAccess(tx, parsed.data.organizationId, authorization.user.id, "attendance:update-own");
-      const locked = await tx.break.findFirst({ where: { id: active.id, endedAt: null }, select: { id: true, type: true, startedAt: true } });
+      const [locked, settings] = await Promise.all([
+        tx.break.findFirst({ where: { id: breakId, organizationId: parsed.data.organizationId, userId: authorization.user.id, endedAt: null }, select: { id: true, type: true, startedAt: true } }),
+        tx.organizationSettings.findUnique({ where: { organizationId: parsed.data.organizationId }, select: { maxBreakMins: true } }),
+      ]);
       if (!locked) throw new Error("BREAK_STATE_CHANGED");
-      await tx.break.update({ where: { id: locked.id }, data: { endedAt: now, durationMins: durationMinutes(locked.startedAt, now) } });
-      await tx.activityLog.create({ data: { organizationId: parsed.data.organizationId, actorId: authorization.user.id, action: locked.type === "LUNCH" ? "lunch.ended" : "break.ended", entityType: "break", entityId: locked.id, metadata: { type: locked.type, durationMins: durationMinutes(locked.startedAt, now), policyExceeded: exceededPolicy, maxBreakMins: settings?.maxBreakMins } } });
+      const now = new Date();
+      const durationMins = durationMinutes(locked.startedAt, now);
+      const limit = settings?.maxBreakMins;
+      exceededLimit = limit != null && now.getTime() - locked.startedAt.getTime() > limit * 60_000 ? limit : undefined;
+      await tx.break.update({ where: { id: locked.id }, data: { endedAt: now, durationMins } });
+      await tx.activityLog.create({ data: { organizationId: parsed.data.organizationId, actorId: authorization.user.id, action: locked.type === "LUNCH" ? "lunch.ended" : "break.ended", entityType: "break", entityId: locked.id, metadata: { type: locked.type, durationMins, policyExceeded: exceededLimit !== undefined, maxBreakMins: limit } } });
     });
   } catch { return { message: "The break state changed in another request. Refresh and try again." }; }
   refreshTimeData();
-  return { success: true, message: exceededPolicy ? `Break ended. It exceeded the ${settings?.maxBreakMins}-minute organization limit.` : "Break ended. Resume a task when you are ready." };
+  return { success: true, message: exceededLimit !== undefined ? `Break ended. It exceeded the ${exceededLimit}-minute organization limit.` : "Break ended. Resume a task when you are ready." };
 }
 
 export async function getActiveTaskTimer(organizationId: string) {

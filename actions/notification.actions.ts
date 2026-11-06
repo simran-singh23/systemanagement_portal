@@ -23,7 +23,7 @@ export async function getMyNotifications(input: unknown = {}) {
     ...(filters.date ? { createdAt: { gte: databaseDate(filters.date), lt: databaseDate(shiftDateKey(filters.date, 1)) } } : {}),
   };
   const [notifications, total, unread] = await Promise.all([
-    prisma.notification.findMany({ where, orderBy: { createdAt: "desc" }, skip: (filters.page - 1) * NOTIFICATION_PAGE_SIZE, take: NOTIFICATION_PAGE_SIZE }),
+    prisma.notification.findMany({ where, orderBy: [{ createdAt: "desc" }, { id: "desc" }], skip: (filters.page - 1) * NOTIFICATION_PAGE_SIZE, take: NOTIFICATION_PAGE_SIZE }),
     prisma.notification.count({ where }),
     prisma.notification.count({ where: { AND: [scope, { readAt: null }] } }),
   ]);

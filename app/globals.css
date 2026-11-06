@@ -12,7 +12,7 @@
   --surface-subtle: #f8fafc;
   --surface-raised: #ffffff;
   --surface-translucent: rgba(255, 255, 255, 0.9);
-  --muted-2: #8a95a6;
+  --muted-2: #667085;
   --blue-strong: #1d55c6;
   --danger: #b42318;
   --radius-card: 1rem;
@@ -26,7 +26,7 @@
   --surface-translucent: rgba(17, 24, 39, 0.9);
   --ink: #edf2f8;
   --muted: #aab4c3;
-  --muted-2: #7f8b9d;
+  --muted-2: #aab4c3;
   --line: #293449;
   --blue: #6f9cff;
   --blue-strong: #9bbaff;
@@ -129,6 +129,7 @@ dialog[open] { animation: tf-dialog 180ms ease-out; }
 }
 
 /* Compatibility layer while legacy screens migrate from literal light colors. */
+[class~="text-[#98a2b3]"], [class~="text-[#7c8799]"], [class~="text-[#8a95a6]"] { color: var(--muted); }
 .dark .bg-white { background-color: var(--surface); }
 .dark [class~="bg-[#f5f7fb]"], .dark [class~="bg-[#fafbfc]"], .dark [class~="bg-[#f7f8fa]"], .dark [class~="bg-[#f8fafc]"] { background-color: var(--surface-subtle); }
 .dark [class~="bg-[#eef1f5]"], .dark [class~="bg-[#edf0f4]"], .dark [class~="bg-[#f2f4f7]"] { background-color: #202b3d; }

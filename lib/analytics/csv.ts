@@ -20,7 +20,7 @@ export function serializeAnalyticsCsv(dataset: AnalyticsDataset, rows: TableRow[
 
 function safeCsv(value: string | number | undefined) {
   const text = String(value ?? "");
-  return /^[=+\-@]/.test(text) ? `'${text}` : text;
+  return /^[\s\u0000-\u001f]*[=+\-@]/.test(text) ? `'${text}` : text;
 }
 
 function csvCell(value: string | number) {

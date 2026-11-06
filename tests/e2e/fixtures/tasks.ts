@@ -68,6 +68,10 @@ export const test = base.extend<{ tasks: TasksFixture }>({
 
 export async function login(page: Page, actor: Actor) {
   await page.goto("/login");
+  if (new URL(page.url()).pathname !== "/login") {
+    await page.getByRole("button", { name: "Sign out", exact: true }).first().click();
+    await expect(page).toHaveURL(/\/login(?:\?|$)/);
+  }
   await page.getByLabel("Work email").fill(actor.email);
   await page.getByLabel("Password", { exact: true }).fill(password);
   await page.getByRole("button", { name: "Sign in", exact: true }).click();

@@ -1,5 +1,7 @@
 # TeamFlow production deployment
 
+Local verification updated 6 November 2026. See [Local launch review](docs/LOCAL_LAUNCH_REVIEW.md) for current checks and the deployment handoff.
+
 Status: **prepared, not deployed**. Production launch is blocked until the items in [the readiness report](docs/PRODUCTION_READINESS.md) are resolved and an authorized person approves the launch.
 
 ## Architecture
@@ -59,7 +61,7 @@ Prisma's current guidance is to use pooled connections for application traffic a
 
 ## Migration procedure
 
-There are 17 migration directories. `prisma validate` succeeds locally. The new `20261023130000_daily_email_delivery` migration and the full chain have not been applied to an isolated staging or production database in this task.
+There are 19 migration directories. The complete chain and backup/restore have passed on disposable local databases. Existing installation history and hosted database compatibility still need verification before release.
 
 Preflight:
 
@@ -87,7 +89,7 @@ Never run `prisma migrate reset`, `prisma db push`, or `npm run db:seed` in prod
 
 ## Vercel setup
 
-No Vercel project is linked and no Git remote is configured in the inspected checkout. An authorized operator must:
+No Vercel project is linked. The checkout has a GitHub remote, and local changes need review and a commit before deployment. An authorized operator must:
 
 1. Push the reviewed repository to the approved Git provider.
 2. Import it once into Vercel; avoid creating a duplicate project.

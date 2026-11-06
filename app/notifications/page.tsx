@@ -14,7 +14,7 @@ const readStates = new Set(["UNREAD", "READ"]);
 
 export default async function NotificationsPage({ searchParams }: { searchParams: Promise<Search> }) {
   const [user, raw] = await Promise.all([requireUser(), searchParams]);
-  const filters = { q: raw.q, category: categories.has(raw.category ?? "") ? raw.category as "TASK" | "ATTENDANCE" | "LEAVE" | "REPORT" | "SYSTEM" : undefined, type: raw.type, read: readStates.has(raw.read ?? "") ? raw.read as "UNREAD" | "READ" : undefined, date: raw.date, page: Math.max(1, Number(raw.page) || 1) };
+  const filters = { q: raw.q, category: categories.has(raw.category ?? "") ? raw.category as "TASK" | "ATTENDANCE" | "LEAVE" | "REPORT" | "SYSTEM" : undefined, type: raw.type || undefined, read: readStates.has(raw.read ?? "") ? raw.read as "UNREAD" | "READ" : undefined, date: raw.date || undefined, page: Math.max(1, Number(raw.page) || 1) };
   const result = await getMyNotifications(filters);
   const hasFilters = Boolean(filters.q || filters.category || filters.type || filters.read || filters.date);
   const params = new URLSearchParams();

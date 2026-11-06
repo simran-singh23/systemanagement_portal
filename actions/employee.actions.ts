@@ -9,7 +9,7 @@ import { reconcileAccountAccess } from "@/lib/member-access";
 import { durationMinutes } from "@/lib/date-time";
 import { sendPasswordSetupOrReset } from "@/lib/password-account";
 import { lockTransaction } from "@/lib/transaction-lock";
-import { canAssignEmployeeRole, canManageEmployeeRole } from "@/lib/employee-policy";
+import { canAssignEmployeeRole, canManageEmployeeRole, employeeTeamOrder } from "@/lib/employee-policy";
 import {
   employeeSchema,
   employeeUpdateSchema,
@@ -35,7 +35,6 @@ function employeeActionError(error: unknown): FormState {
 }
 
 async function closeDeactivatedMemberSessions(tx: Prisma.TransactionClient, organizationId: string, userId: string) {
-  await lockTransaction(tx, userId);
   const now = new Date();
   const sessions = await tx.workSession.findMany({ where: { organizationId, userId, endedAt: null }, select: { id: true, attendanceId: true, startedAt: true } });
   const activeBreaks = await tx.break.findMany({ where: { organizationId, userId, endedAt: null }, select: { id: true, startedAt: true } });
@@ -177,62 +176,76 @@ export async function updateEmployee(
     parsed.data.organizationId,
     "members:manage",
   );
-  const target = await prisma.user.findFirst({
-    where: {
-      id: employeeId,
-      organizationMembers: { some: { organizationId: parsed.data.organizationId } },
-    },
-    select: { id: true, organizationMembers: { where: { organizationId: parsed.data.organizationId }, select: { role: true, status: true } } },
-  });
-
-  if (!target) return { message: "Employee was not found." };
-  if (target.id === actor.id && parsed.data.status === "SUSPENDED") {
+  if (employeeId === actor.id && parsed.data.status === "SUSPENDED") {
     return { message: "You cannot deactivate your own account." };
   }
   const actorRole = actorMembership?.role ?? actor.role;
-  if (!target.organizationMembers[0] || !canManageEmployeeRole(actorRole, target.organizationMembers[0].role) || !canAssignEmployeeRole(actorRole, parsed.data.role)) {
+  if (!canAssignEmployeeRole(actorRole, parsed.data.role)) {
     return { message: "You cannot change this employee or assign this role." };
   }
 
-  const membershipStatus = parsed.data.status === "SUSPENDED" ? "SUSPENDED" : parsed.data.status === "INVITED" ? "INVITED" : "ACTIVE";
-  if (parsed.data.role === "TEAM_LEAD" && (membershipStatus !== "ACTIVE" || !parsed.data.teamId)) {
-    return { errors: { teamId: ["An active team lead must be assigned to a team."] } };
-  }
+  const membershipStatus = parsed.data.status;
 
   try {
     await prisma.$transaction(async (tx) => {
-      const currentMembership = target.organizationMembers[0]!;
-      const closed = membershipStatus !== "ACTIVE" ? await closeDeactivatedMemberSessions(tx, parsed.data.organizationId, employeeId) : null;
+      await lockTransaction(tx, employeeId);
+      const membershipKey = { organizationId: parsed.data.organizationId, userId: employeeId };
+      const currentMembership = await tx.organizationMember.findUnique({
+        where: { organizationId_userId: membershipKey },
+        select: { role: true, status: true },
+      });
+      if (!currentMembership) throw new EmployeeInputError("Employee was not found.");
+      if (!canManageEmployeeRole(actorRole, currentMembership.role)) {
+        throw new EmployeeInputError("You cannot change this employee or assign this role.");
+      }
+
+      // Suspending an existing lead keeps their roster, as does Deactivate account.
+      const suspendingLead = membershipStatus === "SUSPENDED" && currentMembership.role === "TEAM_LEAD" && parsed.data.role === "TEAM_LEAD";
+      if (parsed.data.role === "TEAM_LEAD" && !suspendingLead && (membershipStatus !== "ACTIVE" || !parsed.data.teamId)) {
+        throw new EmployeeInputError("An active team lead must be assigned to a team.", "teamId");
+      }
       const team = parsed.data.teamId
         ? await tx.team.findFirst({ where: { id: parsed.data.teamId, organizationId: parsed.data.organizationId }, select: { id: true, managerId: true } })
         : null;
       if (parsed.data.teamId && !team) throw new EmployeeInputError("Choose a team from this organization.", "teamId");
-      if (parsed.data.role === "TEAM_LEAD" && team?.managerId && team.managerId !== employeeId) {
+      if (parsed.data.role === "TEAM_LEAD" && !suspendingLead && team?.managerId && team.managerId !== employeeId) {
         throw new EmployeeInputError("This team already has a lead. Change its lead from Team Management first.", "teamId");
       }
 
+      const currentTeam = await tx.teamMember.findFirst({
+        where: { userId: employeeId, team: { organizationId: parsed.data.organizationId } },
+        orderBy: employeeTeamOrder,
+        select: { teamId: true },
+      });
+      const placementChanged = currentMembership.role !== parsed.data.role
+        || currentTeam?.teamId !== team?.id
+        || (parsed.data.role === "TEAM_LEAD" && team?.managerId !== employeeId);
+
+      const closed = membershipStatus !== "ACTIVE" ? await closeDeactivatedMemberSessions(tx, parsed.data.organizationId, employeeId) : null;
       await tx.user.update({
         where: { id: employeeId },
         data: {
           name: parsed.data.name,
-          jobTitle: parsed.data.jobTitle,
+          jobTitle: parsed.data.jobTitle ?? null,
           ...(currentMembership.status !== membershipStatus ? { authVersion: { increment: 1 } } : {}),
         },
       });
       await tx.organizationMember.update({
-        where: { organizationId_userId: { organizationId: parsed.data.organizationId, userId: employeeId } },
-        data: { role: parsed.data.role, status: membershipStatus, department: parsed.data.department },
+        where: { organizationId_userId: membershipKey },
+        data: { role: parsed.data.role, status: membershipStatus, department: parsed.data.department ?? null },
       });
       await reconcileAccountAccess(tx, employeeId);
 
-      await tx.teamMember.deleteMany({ where: { userId: employeeId, team: { organizationId: parsed.data.organizationId } } });
-      await tx.team.updateMany({
-        where: { organizationId: parsed.data.organizationId, managerId: employeeId, ...(parsed.data.role === "TEAM_LEAD" && team ? { id: { not: team.id } } : {}) },
-        data: { managerId: null },
-      });
-      if (team) {
-        await tx.teamMember.create({ data: { teamId: team.id, userId: employeeId, role: parsed.data.role === "TEAM_LEAD" ? "LEAD" : "MEMBER" } });
-        if (parsed.data.role === "TEAM_LEAD") await tx.team.update({ where: { id: team.id }, data: { managerId: employeeId } });
+      if (!suspendingLead && placementChanged) {
+        await tx.teamMember.deleteMany({ where: { userId: employeeId, team: { organizationId: parsed.data.organizationId } } });
+        await tx.team.updateMany({
+          where: { organizationId: parsed.data.organizationId, managerId: employeeId, ...(parsed.data.role === "TEAM_LEAD" && team ? { id: { not: team.id } } : {}) },
+          data: { managerId: null },
+        });
+        if (team) {
+          await tx.teamMember.create({ data: { teamId: team.id, userId: employeeId, role: parsed.data.role === "TEAM_LEAD" ? "LEAD" : "MEMBER" } });
+          if (parsed.data.role === "TEAM_LEAD") await tx.team.update({ where: { id: team.id }, data: { managerId: employeeId } });
+        }
       }
 
       await tx.activityLog.create({
@@ -262,6 +275,7 @@ export async function deactivateEmployee(
   if (!target?.organizationMembers[0] || !canManageEmployeeRole(actorMembership?.role ?? actor.role, target.organizationMembers[0].role)) throw new Error("Unauthorized employee update.");
 
   await prisma.$transaction(async (tx) => {
+    await lockTransaction(tx, employeeId);
     const closed = await closeDeactivatedMemberSessions(tx, organizationId, employeeId);
     await tx.user.update({ where: { id: employeeId }, data: { authVersion: { increment: 1 } } });
     await tx.organizationMember.update({

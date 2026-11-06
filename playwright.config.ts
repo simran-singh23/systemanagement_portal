@@ -3,6 +3,7 @@ import { assertSafeTestDatabaseUrl } from "./tests/helpers/test-database";
 
 const port = 3100;
 const baseURL = `http://127.0.0.1:${port}`;
+const production = process.env.E2E_PRODUCTION === "1";
 const testDatabase = assertSafeTestDatabaseUrl(process.env.TEST_DATABASE_URL ?? "postgresql://postgres:postgres@127.0.0.1:5432/teamflow_test?schema=public");
 
 export default defineConfig({
@@ -24,7 +25,7 @@ export default defineConfig({
     },
   ],
   webServer: {
-    command: `npm run dev -- --hostname 127.0.0.1 --port ${port}`,
+    command: `npm run ${production ? "start" : "dev"} -- --hostname 127.0.0.1 --port ${port}`,
     url: `${baseURL}/login`,
     reuseExistingServer: false,
     timeout: 120_000,

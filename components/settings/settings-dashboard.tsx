@@ -1,7 +1,6 @@
 "use client";
 
-import { useActionState, useEffect, useState } from "react";
-import { useFormStatus } from "react-dom";
+import { startTransition, useActionState, useEffect, useState } from "react";
 import Link from "next/link";
 import type { BreakType, LeaveType, UserRole } from "@prisma/client";
 import {
@@ -60,7 +59,12 @@ const textArea = `${control} h-auto min-h-28 py-3`;
 export function SettingsDashboard({ organization, settings, holidays, recipients, emailDeliveryAvailable, aiProviderAvailable, initialSection, timezones }: Props) {
   const [active, setActive] = useState<SectionId>(initialSection);
   const [dirty, setDirty] = useState(false);
-  const [state, action] = useActionState(updateOrganizationSettings, initialState);
+  const [result, action, pending] = useActionState(async (previous: SettingsActionState, data: FormData) => {
+    const saved = await updateOrganizationSettings(previous, data);
+    if (saved.success) setDirty(false);
+    return saved;
+  }, initialState);
+  const state = pending ? initialState : result;
 
   useEffect(() => {
     const warn = (event: BeforeUnloadEvent) => { if (dirty) event.preventDefault(); };
@@ -91,9 +95,15 @@ export function SettingsDashboard({ organization, settings, holidays, recipients
         <div className="mt-3 hidden rounded-2xl bg-[#172033] p-4 text-white lg:block"><Settings2 className="size-5 text-[#8fb1ff]" /><p className="mt-4 text-sm font-semibold">Policy scope</p><p className="mt-1 text-xs leading-5 text-white/60">Attendance, leave, reports, analytics and automations share this configuration.</p></div>
       </aside>
 
-      <main className="min-w-0">
+      <div className="min-w-0">
         {active === "holidays" ? <HolidaySection organizationId={organization.id} holidays={holidays} timezone={settings.timezone} /> : null}
-        <form action={action} onChange={() => setDirty(true)} onSubmit={() => setDirty(false)} className={active === "holidays" ? "hidden" : "space-y-4"}>
+        <form action={action} onChange={() => setDirty(true)} onSubmit={(event) => {
+          event.preventDefault();
+          if (pending) return;
+          const data = new FormData(event.currentTarget);
+          startTransition(() => action(data));
+        }} className={active === "holidays" ? "hidden" : "space-y-4"}>
+          <fieldset disabled={pending} className="space-y-4">
           <input type="hidden" name="organizationId" value={organization.id} />
           <Panel visible={active === "general"} eyebrow="Organization profile" title="General information" description="The identity and primary contact details shown across TeamFlow.">
             <div className="grid gap-4 sm:grid-cols-2"><Field label="Organization name" error={state.errors?.name}><input className={control} name="name" defaultValue={organization.name} required /></Field><Field label="Timezone" hint="Valid IANA timezone"><select className={control} name="timezone" defaultValue={settings.timezone} required>{!timezones.includes(settings.timezone) ? <option value={settings.timezone}>{settings.timezone}</option> : null}{timezones.map((timezone) => <option key={timezone} value={timezone}>{timezone}</option>)}</select></Field><Field label="Contact email" error={state.errors?.contactEmail}><input className={control} type="email" name="contactEmail" defaultValue={organization.contactEmail ?? ""} placeholder="operations@company.com" /></Field><Field label="Contact phone"><input className={control} name="contactPhone" defaultValue={organization.contactPhone ?? ""} placeholder="+91 98765 43210" /></Field><Field label="Logo URL" hint="URL only; file storage is not configured"><input className={control} type="url" name="logoUrl" defaultValue={organization.logoUrl ?? ""} placeholder="https://…" /></Field></div>
@@ -111,12 +121,12 @@ export function SettingsDashboard({ organization, settings, holidays, recipients
           </Panel>
 
           <Panel visible={active === "attendance"} eyebrow="Presence rules" title="Attendance policies" description="Late and half-day thresholds are evaluated in the organization timezone.">
-            <div className="grid gap-4 sm:grid-cols-2"><Field label="Half-day threshold" hint="Minutes worked before HALF_DAY applies"><input className={control} type="number" name="halfDayThresholdMins" min="30" max="720" step="15" defaultValue={settings.halfDayThresholdMins} /></Field><Field label="Absence finalization time"><input className={control} type="time" name="absenceFinalizationTime" defaultValue={settings.absenceFinalizationTime} /></Field></div>
+            <div className="grid gap-4 sm:grid-cols-2"><Field label="Half-day threshold" hint="Minutes worked before HALF_DAY applies"><input className={control} type="number" name="halfDayThresholdMins" min="30" max="720" step="15" defaultValue={settings.halfDayThresholdMins} /></Field></div>
             <CapabilityNotice title="Correction workflow not enabled">Manual attendance correction and automatic absence finalization remain off until a reviewed correction workflow is implemented. The current setting is preserved and cannot be changed from this screen.</CapabilityNotice>
           </Panel>
 
           <Panel visible={active === "breaks"} eyebrow="Healthy pacing" title="Break policies" description="Control suggested duration, available break reasons and reminder behavior.">
-            <div className="grid gap-4 sm:grid-cols-3"><Field label="Lunch reminder"><input className={control} type="time" name="lunchReminderTime" defaultValue={settings.lunchReminderTime} /></Field><Field label="Suggested lunch (minutes)"><input className={control} type="number" name="suggestedLunchMins" min="5" max="240" defaultValue={settings.suggestedLunchMins} /></Field><Field label="Maximum break (minutes)" hint="Blank means no hard maximum"><input className={control} type="number" name="maxBreakMins" min="5" max="480" defaultValue={settings.maxBreakMins ?? ""} /></Field></div>
+            <div className="grid gap-4 sm:grid-cols-3"><Field label="Lunch reminder"><input className={control} type="time" name="lunchReminderTime" defaultValue={settings.lunchReminderTime} /></Field><Field label="Suggested lunch (minutes)"><input className={control} type="number" name="suggestedLunchMins" min="5" max="240" defaultValue={settings.suggestedLunchMins} /></Field><Field label="Break limit (minutes)" hint="Longer breaks are flagged when they end. Leave blank for no limit."><input className={control} type="number" name="maxBreakMins" min="5" max="480" defaultValue={settings.maxBreakMins ?? ""} /></Field></div>
             <OptionChecks name="allowedBreakTypes" title="Allowed break types" values={ALL_BREAK_TYPES} selected={settings.allowedBreakTypes} />
             <Toggle name="enableLunchReminders" label="Lunch reminders" description="Send a reminder at the configured lunch time on working days." checked={settings.enableLunchReminders} />
           </Panel>
@@ -157,13 +167,13 @@ export function SettingsDashboard({ organization, settings, holidays, recipients
             <ImpactNote>Only organization-scoped tasks and submitted daily reports are included. Employee names, email addresses, attendance duration, leave reasons and private notes are excluded. AI cannot change tasks, people, attendance or policy settings; every factual item must cite a TeamFlow source and remains subject to human review.</ImpactNote>
           </Panel>
 
-          <input type="hidden" name="allowEmployeeTaskEdit" value={settings.allowEmployeeTaskEdit ? "on" : ""} />
           <div className="sticky bottom-4 z-20 flex flex-col gap-3 rounded-2xl border border-[#cad6e7] bg-white/95 p-3 shadow-[0_18px_50px_rgba(36,50,75,0.16)] backdrop-blur sm:flex-row sm:items-center sm:justify-between">
-            <div className="min-w-0"><p className="text-sm font-semibold text-[#344054]">{dirty ? "Unsaved policy changes" : "Configuration synchronized"}</p><p className="truncate text-xs text-[#98a2b3]">{dirty ? "Save to apply these rules to future operations." : "Historical data remains unchanged."}</p></div><SaveButton />
+            <div className="min-w-0"><p className="text-sm font-semibold text-[#344054]">{dirty ? "Unsaved policy changes" : "Configuration synchronized"}</p><p className="truncate text-xs text-[#98a2b3]">{dirty ? "Save to apply these rules to future operations." : "Historical data remains unchanged."}</p></div><SaveButton pending={pending} />
           </div>
+          </fieldset>
           {state.message ? <p role="status" className={`rounded-xl px-4 py-3 text-sm ${state.success ? "bg-[#eaf8f2] text-[#157357]" : "bg-[#fff1f0] text-[#a43b32]"}`}>{state.message}</p> : null}
         </form>
-      </main>
+      </div>
     </div>
   </div>;
 }
@@ -176,7 +186,7 @@ function Toggle({ name, label, description, checked, disabled }: { name: string;
 function OptionChecks<T extends string>({ name, title, values, selected }: { name: string; title: string; values: T[]; selected: T[] }) { return <div><p className="text-xs font-semibold uppercase tracking-[0.1em] text-[#7c8799]">{title}</p><div className="mt-2 flex flex-wrap gap-2">{values.map((value) => <label key={value} className="flex cursor-pointer items-center gap-2 rounded-xl border border-[#e1e6ed] px-3 py-2 text-xs font-medium text-[#344054] hover:border-[#b9cae8]"><input type="checkbox" name={name} value={value} defaultChecked={selected.includes(value)} className="size-4 accent-[#2563eb]" />{value.replaceAll("_", " ")}</label>)}</div></div>; }
 function ImpactNote({ children }: { children: React.ReactNode }) { return <div className="rounded-xl border border-[#cfdcf2] bg-[#f6f9ff] px-4 py-3 text-xs leading-5 text-[#49658f]">{children}</div>; }
 function CapabilityNotice({ title, children }: { title: string; children: React.ReactNode }) { return <div className="rounded-xl border border-[#e2e6ec] bg-[#f8f9fb] p-4"><p className="text-sm font-semibold text-[#536074]">{title}</p><p className="mt-1 text-xs leading-5 text-[#7c8799]">{children}</p></div>; }
-function SaveButton() { const { pending } = useFormStatus(); return <button disabled={pending} className="inline-flex h-11 shrink-0 items-center justify-center gap-2 rounded-xl bg-[#172033] px-5 text-sm font-semibold text-white transition hover:bg-[#253047] disabled:opacity-60"><Save className="size-4" />{pending ? "Saving…" : "Save changes"}</button>; }
+function SaveButton({ pending }: { pending: boolean }) { return <button disabled={pending} className="inline-flex h-11 shrink-0 items-center justify-center gap-2 rounded-xl bg-[#172033] px-5 text-sm font-semibold text-white transition hover:bg-[#253047] disabled:opacity-60"><Save className="size-4" />{pending ? "Saving…" : "Save changes"}</button>; }
 
 function HolidaySection({ organizationId, holidays, timezone }: { organizationId: string; holidays: Props["holidays"]; timezone: string }) {
   const [state, action] = useActionState(createHoliday, initialState);

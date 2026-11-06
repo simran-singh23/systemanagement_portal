@@ -1,6 +1,7 @@
+import type { TaskStatus } from "@prisma/client";
 import { unionMilliseconds, type TimeInterval } from "./work-time";
 
-type TaskRecord = { id: string; title: string; status: string };
+type TaskRecord = { id: string; title: string; status: TaskStatus };
 type TaskSession = TimeInterval & { taskId: string | null; task: TaskRecord | null };
 type EvidenceTask = TaskRecord & { milliseconds: number; completedToday: boolean };
 

@@ -6,6 +6,7 @@ import { EmployeeForm } from "@/components/people/employee-form";
 import { initials, RoleBadge, StatusBadge } from "@/components/people/people-badges";
 import { Icon } from "@/components/ui/icons";
 import { requireCurrentOrganization } from "@/lib/dal/auth";
+import { employeeTeamOrder } from "@/lib/employee-policy";
 import { prisma } from "@/lib/prisma";
 
 export const metadata: Metadata = { title: "Employee profile" };
@@ -15,7 +16,7 @@ export default async function EmployeeProfilePage({ params }: PageProps<"/dashbo
   const [membership, teams, taskCount, completedCount, reportCount, attendanceCount] = await Promise.all([
     prisma.organizationMember.findUnique({
       where: { organizationId_userId: { organizationId: organization.id, userId: employeeId } },
-      include: { user: { include: { teamMembers: { where: { team: { organizationId: organization.id } }, include: { team: true }, take: 1 } } } },
+      include: { user: { include: { teamMembers: { where: { team: { organizationId: organization.id } }, include: { team: true }, orderBy: employeeTeamOrder, take: 1 } } } },
     }),
     prisma.team.findMany({ where: { organizationId: organization.id }, select: { id: true, name: true }, orderBy: { name: "asc" } }),
     prisma.task.count({ where: { organizationId: organization.id, assignedToId: employeeId } }),

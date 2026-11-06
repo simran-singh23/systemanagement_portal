@@ -75,7 +75,7 @@ export async function getNotificationPreview(userId: string) {
   const organizationIds = await notificationOrganizationIds(userId);
   const scope = notificationScope(userId, organizationIds);
   const [notifications, unreadCount] = await Promise.all([
-    prisma.notification.findMany({ where: scope, orderBy: { createdAt: "desc" }, take: NOTIFICATION_PREVIEW_SIZE }),
+    prisma.notification.findMany({ where: scope, orderBy: [{ createdAt: "desc" }, { id: "desc" }], take: NOTIFICATION_PREVIEW_SIZE }),
     prisma.notification.count({ where: { AND: [scope, { readAt: null }] } }),
   ]);
   return { notifications: notifications.map(notificationDTO), unreadCount };

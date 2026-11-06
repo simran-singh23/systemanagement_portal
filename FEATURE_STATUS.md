@@ -2,6 +2,57 @@
 
 Next development work and acceptance checks: [PENDING_WORK.md](PENDING_WORK.md).
 
+## Local launch-readiness pass — 2026-11-06
+
+- Corrected analytics and employee overview task-time totals, CSV search/sort and escaping, search destinations, notification refresh/filter behavior and inactive-account attendance counts.
+- Fixed shared control labels, pagination link names, calendar keyboard scrolling and muted-text contrast. Checked 17 authenticated routes at 390px and 1440px, with no critical or serious WCAG A/AA findings in their main content.
+- Passed 65 browser regressions, 18 core browser checks against the production build, 128 unit tests, 21 integration checks, lint, typecheck, Prisma validation and the production build. The runtime dependency audit reported zero vulnerabilities after compatible dependency updates.
+- Passed a fresh migration and backup/restore rehearsal over 32 tables on disposable local databases. Production environment validation has regression coverage, and actual deployment values remain to be configured.
+- The current scope is local fixes. Hosting, live integration checks, managed backups and any existing database upgrade will be planned next. See [Local launch review](docs/LOCAL_LAUNCH_REVIEW.md).
+
+## Reports and Team Pulse — 2026-11-06
+
+- Drafts retain edits after validation, including the selected pulse. A blocked pulse requires a description. Clearing optional text clears the saved value.
+- The employee report and manager overview follow the configured overnight workday. Report evidence attaches attendance, breaks and task sessions to that date and counts task completions in the overnight window. Employees can reopen earlier workdays from the date selector or report history.
+- Submitted reports are read-only unless revisions are enabled. Revisions preserve the original submission time and pulse record. An authorized reviewer can mark a submitted report reviewed after reading its latest revision, which locks it against further edits.
+- The manager overview counts eligible employees without a submission as missing, including those with a draft. Holidays, approved leave and inactive accounts are excluded from expectations. Team-lead access to lists, report details and review actions stays within teams they lead in the current organization.
+- Local verification passed 60 browser tests, 125 unit tests, 21 integration checks, lint, typecheck, Prisma validation and the production build.
+
+## Leave decisions — 2026-11-06
+
+- Team leads see and review requests only for employees on teams they lead in the same organization. Decision actions recheck reviewer access before saving.
+- Rejection and cancellation are final. Duplicate decisions leave the saved outcome, audit entry and notification intact. Reviewer notes survive a rejected submission and appear in the employee’s history after the decision is saved.
+- If overlapping leave is disabled, only one of two overlapping requests can be approved. With overlaps enabled, the original attendance projection remains attached to its approved request. A request with no remaining working days cannot be approved.
+- Approval and check-in share the employee lock. When check-in happens first, the approval flags the conflict and preserves actual attendance. When approval happens first, check-in is blocked and the leave projection remains intact.
+- Local verification passed 57 browser tests, 125 unit tests, 21 integration checks, lint, typecheck, Prisma validation and the production build.
+
+## Attendance, timers and breaks — 2026-11-06
+
+- Overnight shifts and older open sessions retain their attendance date. Checkout ends the office session and any linked task or break at the same timestamp. Half-day status uses net time after overlapping breaks are counted once.
+- Concurrent check-ins create one office session. Replayed checkout, pause and end-break requests cannot close a newer session. Each widget shows the latest result when employees repeat an action.
+- Holidays and non-working days allow optional check-in without a late or half-day penalty. Approved leave blocks check-in in both the employee form and the server action.
+- Local verification passed 53 browser tests, 125 unit tests, 21 integration checks, lint, typecheck, Prisma validation and the production build.
+
+## Organization settings and automation policies — 2026-11-06
+
+- Rejected settings saves retain the draft. Validation aligns pre-shift and overnight reminders with the scheduler. Saved timezone and office hours drive the attendance work date.
+- Employee forms use the saved break and leave types. Leave applies working days, holidays and notice rules, and permits historical requests when enabled. Inline feedback keeps the form usable for retries.
+- Verified the saved checkout requirement at report submission, holiday exclusions in the manager overview, and scheduler execution against the saved overnight and holiday policy.
+- Local verification passed 50 browser tests, 125 unit tests, 21 reported integration tests, lint, typecheck, Prisma validation and the production build.
+
+## Teams and Employee Management — 2026-11-06
+
+- Profile-only saves preserve existing roster entries and use the same team order as the employee directory. Blank job titles, departments and team descriptions clear the saved value. Team and employee forms show feedback for the current submission.
+- Replacing a suspended lead demotes the former lead if they lead no other team. Their membership stays suspended. Browser tests also verify roster and assignment changes, work history, audit events and rejected forged requests.
+- The invitation from the manager form completed through the actual development setup link and a fresh employee sign-in. Browser tests also verified password reset and change, account reactivation, session revocation and membership isolation across two organizations.
+- Local checks passed with 47 browser tests, 125 unit tests, 20 reported integration tests, lint, typecheck, Prisma validation and the production build.
+
+## Browser baseline and team-lead deactivation — 2026-11-06
+
+- The full local browser suite passed all 45 tests against a fresh test database. The two authenticated smoke tests now sign in with fixtures.
+- Saving a team lead as deactivated closes their open office session and task timers and revokes existing logins. Their roster, task assignments and membership in another organization are preserved. The browser regression covers deactivation and reactivation.
+- Lint, typecheck, Prisma validation, the production build, 125 unit tests and 20 reported integration tests passed.
+
 ## Local backend verification — 2026-10-31
 
 - Preserved the existing local migration repair and verified the initial 18 migrations on fresh, isolated development and test databases; rerunning setup succeeds without pending migrations. The follow-up forward migration for saved email requests brings the current total to 19, also verified on a fresh test database.

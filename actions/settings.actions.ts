@@ -38,7 +38,6 @@ const settingsSchema = z.object({
   lateGraceMins: integer(0, 180),
   expectedDailyMinutes: integer(60, 1440),
   halfDayThresholdMins: integer(30, 720),
-  absenceFinalizationTime: clock,
   lunchReminderTime: clock,
   suggestedLunchMins: integer(5, 240),
   maxBreakMins: z.union([z.literal(""), z.coerce.number().int().min(5).max(480)]).transform((value) => value === "" ? null : value),
@@ -80,7 +79,7 @@ async function settingsAdmin(inputOrganizationId: string) {
 }
 
 function parseSettings(formData: FormData) {
-  const names = ["organizationId", "name", "contactEmail", "contactPhone", "logoUrl", "description", "timezone", "workdayStart", "workdayEnd", "lateGraceMins", "expectedDailyMinutes", "halfDayThresholdMins", "absenceFinalizationTime", "lunchReminderTime", "suggestedLunchMins", "maxBreakMins", "checkInReminderTime", "checkInCutoffTime", "dailyReportReminderTime", "dailyReportDueTime", "managerSummaryTime", "dailyEmailTime", "leaveAdvanceNoticeDays", "taskDeadlineReminderHours", "primaryReportRecipientId", "aiMonthlyRequestLimit", "aiMonthlyTokenLimit", "aiContextMaxChars", "aiRetentionDays"];
+  const names = ["organizationId", "name", "contactEmail", "contactPhone", "logoUrl", "description", "timezone", "workdayStart", "workdayEnd", "lateGraceMins", "expectedDailyMinutes", "halfDayThresholdMins", "lunchReminderTime", "suggestedLunchMins", "maxBreakMins", "checkInReminderTime", "checkInCutoffTime", "dailyReportReminderTime", "dailyReportDueTime", "managerSummaryTime", "dailyEmailTime", "leaveAdvanceNoticeDays", "taskDeadlineReminderHours", "primaryReportRecipientId", "aiMonthlyRequestLimit", "aiMonthlyTokenLimit", "aiContextMaxChars", "aiRetentionDays"];
   return settingsSchema.safeParse(Object.fromEntries(names.map((name) => [name, field(formData, name)])));
 }
 
@@ -141,7 +140,7 @@ export async function updateOrganizationSettings(_state: SettingsActionState, fo
     overnightShiftEnabled,
     halfDayThresholdMins: parsed.data.halfDayThresholdMins,
     autoFinalizeAbsence: previous?.autoFinalizeAbsence ?? ORGANIZATION_SETTINGS_DEFAULTS.autoFinalizeAbsence,
-    absenceFinalizationTime: parsed.data.absenceFinalizationTime,
+    absenceFinalizationTime: previous?.absenceFinalizationTime ?? ORGANIZATION_SETTINGS_DEFAULTS.absenceFinalizationTime,
     allowAttendanceCorrections: previous?.allowAttendanceCorrections ?? ORGANIZATION_SETTINGS_DEFAULTS.allowAttendanceCorrections,
     requireCorrectionApproval: previous?.requireCorrectionApproval ?? ORGANIZATION_SETTINGS_DEFAULTS.requireCorrectionApproval,
     lunchReminderTime: parsed.data.lunchReminderTime,
@@ -155,7 +154,7 @@ export async function updateOrganizationSettings(_state: SettingsActionState, fo
     managerSummaryTime: parsed.data.managerSummaryTime,
     taskDeadlineReminderHours: reminderHours,
     requireDailyReports: checked(formData, "requireDailyReports"),
-    allowEmployeeTaskEdit: checked(formData, "allowEmployeeTaskEdit"),
+    allowEmployeeTaskEdit: previous?.allowEmployeeTaskEdit ?? ORGANIZATION_SETTINGS_DEFAULTS.allowEmployeeTaskEdit,
     allowReportBeforeCheckout: checked(formData, "allowReportBeforeCheckout"),
     allowReportEditingAfterSubmission: checked(formData, "allowReportEditingAfterSubmission"),
     allowOverlappingLeaveRequests: checked(formData, "allowOverlappingLeaveRequests"),

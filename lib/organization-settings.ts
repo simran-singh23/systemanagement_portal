@@ -1,5 +1,6 @@
 import type { BreakType, LeaveType, UserRole } from "@prisma/client";
 import { validClock, validTimeZone } from "@/lib/automation-schedule";
+import { parseClockMinutes } from "@/lib/date-time";
 
 export const WEEK_DAYS = [
   { value: 0, short: "Sun", label: "Sunday" },
@@ -98,21 +99,26 @@ export function validateAutomationScheduleOrder(input: {
 }) {
   const officeError = validateOfficeWindow(input.workdayStart, input.workdayEnd, input.overnight);
   if (officeError) return officeError;
-  const minute = (clock: string) => {
-    const [hour, value] = clock.split(":").map(Number);
-    const result = hour * 60 + value;
-    return input.overnight && result < parseClock(input.workdayStart) ? result + 1440 : result;
+  const start = parseClockMinutes(input.workdayStart);
+  const end = parseClockMinutes(input.workdayEnd);
+  const overnight = end < start;
+  // Match the scheduler's work-date rules for attendance and reporting.
+  const attendanceMinute = (clock: string) => {
+    const minute = parseClockMinutes(clock);
+    return overnight && minute <= end ? minute + 1440 : minute;
   };
-  if (minute(input.checkInReminderTime) > minute(input.checkInCutoffTime)) return "Set the missing check-in cutoff at or after the check-in reminder.";
-  if (minute(input.dailyReportReminderTime) > minute(input.dailyReportDueTime)) return "Set the report reminder at or before its submission deadline.";
-  if (minute(input.dailyReportDueTime) > minute(input.managerSummaryTime)) return "Set the manager summary at or after the report deadline.";
-  if (input.dailyEmailEnabled && input.dailyEmailTime && minute(input.dailyEmailTime) <= Math.max(minute(input.managerSummaryTime), minute(input.dailyReportDueTime), minute(input.workdayEnd))) {
+  const reportingMinute = (clock: string) => {
+    const minute = parseClockMinutes(clock);
+    return overnight && minute < start ? minute + 1440 : minute;
+  };
+  if (attendanceMinute(input.checkInReminderTime) > attendanceMinute(input.checkInCutoffTime)) return "Set the missing check-in cutoff at or after the check-in reminder.";
+  if (reportingMinute(input.dailyReportReminderTime) > reportingMinute(input.dailyReportDueTime)) return "Set the report reminder at or before its submission deadline.";
+  if (reportingMinute(input.dailyReportDueTime) > reportingMinute(input.managerSummaryTime)) return "Set the manager summary at or after the report deadline.";
+  if (input.dailyEmailEnabled && input.dailyEmailTime && reportingMinute(input.dailyEmailTime) <= Math.max(reportingMinute(input.managerSummaryTime), reportingMinute(input.dailyReportDueTime), reportingMinute(input.workdayEnd))) {
     return "Schedule daily email after the office workday, report deadline, and manager summary.";
   }
   return null;
 }
-
-function parseClock(value: string) { const [hour, minute] = value.split(":").map(Number); return hour * 60 + minute; }
 
 export function settingsImpactSummary(keys: string[]) {
   const areas = new Set<string>();

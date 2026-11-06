@@ -1,4 +1,10 @@
-import type { UserRole } from "@prisma/client";
+import type { Prisma, UserRole } from "@prisma/client";
+
+export const employeeTeamOrder: Prisma.TeamMemberOrderByWithRelationInput[] = [
+  { role: "asc" }, // LEAD comes before MEMBER in the database enum.
+  { joinedAt: "asc" },
+  { id: "asc" },
+];
 
 export function canAssignEmployeeRole(actorRole: UserRole, targetRole: UserRole) {
   if (targetRole === "SUPER_ADMIN") return false;

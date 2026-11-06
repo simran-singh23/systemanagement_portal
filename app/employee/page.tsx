@@ -31,7 +31,7 @@ export default async function EmployeeDashboard() {
   const [completed, inProgress, sessions, attendance, attendanceHistory, dueTasks, activeSession, logs] = await Promise.all([
     prisma.task.count({ where: { organizationId: organization.id, assignedToId: user.id, completedAt: { gte: monthStart }, archivedAt: null } }),
     prisma.task.count({ where: { organizationId: organization.id, assignedToId: user.id, status: "IN_PROGRESS", archivedAt: null } }),
-    prisma.workSession.findMany({ where: { organizationId: organization.id, userId: user.id, startedAt: { gte: weekStart, lt: today.end } }, select: { startedAt: true, endedAt: true } }),
+    prisma.workSession.findMany({ where: { organizationId: organization.id, userId: user.id, taskId: { not: null }, startedAt: { gte: weekStart, lt: today.end } }, select: { startedAt: true, endedAt: true } }),
     prisma.attendance.findUnique({ where: { organizationId_userId_attendanceDate: { organizationId: organization.id, userId: user.id, attendanceDate: todayDate } }, select: { checkInAt: true, checkOutAt: true } }),
     prisma.attendance.findMany({ where: { organizationId: organization.id, userId: user.id, attendanceDate: { gte: lastThirty, lte: todayDate } }, select: { status: true } }),
     prisma.task.findMany({ where: { organizationId: organization.id, assignedToId: user.id, dueAt: { gte: today.start, lt: today.end }, archivedAt: null }, include: { team: { select: { name: true } } }, orderBy: [{ status: "asc" }, { dueAt: "asc" }], take: 6 }),

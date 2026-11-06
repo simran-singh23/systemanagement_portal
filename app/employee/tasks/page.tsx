@@ -7,7 +7,8 @@ import { formatTaskDate, isOverdue, PriorityBadge, StatusBadge } from "@/compone
 import { Icon } from "@/components/ui/icons";
 import { ActiveTaskTimer } from "@/components/time-tracking/active-task-timer";
 import { requireCurrentOrganization } from "@/lib/dal/auth";
-import { dateKeyInZone, isValidDateKey } from "@/lib/date-time";
+import { attendanceWorkdayKey, databaseDate, dateKeyInZone, isValidDateKey } from "@/lib/date-time";
+import { ORGANIZATION_SETTINGS_DEFAULTS } from "@/lib/organization-settings";
 import { prisma } from "@/lib/prisma";
 import { taskDetailsData, taskDetailsInclude } from "@/lib/task-details";
 import { taskDeadlineWindows } from "@/lib/task-deadlines";
@@ -22,21 +23,35 @@ export default async function EmployeeTasksPage({ searchParams }: { searchParams
   const where: Prisma.TaskWhereInput = { organizationId: organization.id, assignedToId: user.id, archivedAt: null, ...(validStatus ? { status: validStatus } : {}), ...(q ? { title: { contains: q, mode: "insensitive" } } : {}) };
   const now = new Date();
   const [tasks, detail, activity, officeSession, activeBreak, settings, runningSession, historySessions] = await Promise.all([
-    prisma.task.findMany({ where, include: { team: { select: { name: true, color: true } }, createdBy: { select: { name: true } }, workSessions: { where: { userId: user.id }, select: { id: true, startedAt: true, endedAt: true, attendance: { select: { attendanceDate: true } } } } }, orderBy: [{ dueAt: "asc" }, { createdAt: "desc" }] }),
+    prisma.task.findMany({ where, include: { team: { select: { name: true, color: true } }, createdBy: { select: { name: true } }, workSessions: { where: { userId: user.id }, select: { startedAt: true, endedAt: true } } }, orderBy: [{ dueAt: "asc" }, { createdAt: "desc" }] }),
     filters.task ? prisma.task.findFirst({ where: { id: filters.task, organizationId: organization.id, assignedToId: user.id, archivedAt: null }, include: taskDetailsInclude }) : null,
     filters.task ? prisma.activityLog.findMany({ where: { organizationId: organization.id, entityType: "task", entityId: filters.task }, include: { actor: { select: { name: true, email: true } } }, orderBy: { createdAt: "desc" }, take: 12 }) : [],
-    prisma.workSession.findFirst({ where: { organizationId: organization.id, userId: user.id, taskId: null, endedAt: null }, select: { id: true } }),
+    prisma.workSession.findFirst({ where: { organizationId: organization.id, userId: user.id, taskId: null, endedAt: null }, select: { id: true, attendance: { select: { attendanceDate: true } } } }),
     prisma.break.findFirst({ where: { organizationId: organization.id, userId: user.id, endedAt: null }, select: { id: true } }),
-    prisma.organizationSettings.findUnique({ where: { organizationId: organization.id }, select: { timezone: true } }),
+    prisma.organizationSettings.findUnique({ where: { organizationId: organization.id }, select: { timezone: true, workdayStart: true, workdayEnd: true, overnightShiftEnabled: true } }),
     prisma.workSession.findFirst({ where: { organizationId: organization.id, userId: user.id, taskId: { not: null }, endedAt: null }, include: { task: { select: { id: true, title: true, estimatedMins: true, workSessions: { where: { userId: user.id }, select: { startedAt: true, endedAt: true } } } } } }),
     prisma.workSession.findMany({ where: { organizationId: organization.id, userId: user.id, taskId: { not: null } }, include: { task: { select: { id: true, title: true } }, attendance: { select: { attendanceDate: true } } }, orderBy: { startedAt: "desc" }, take: 200 }),
   ]);
-  const taskRows = tasks.map(({ workSessions, ...task }) => ({ ...task, hasSessions: workSessions.length > 0, actualMs: workSessions.reduce((sum, session) => sum + Math.max(0, (session.endedAt ?? now).getTime() - session.startedAt.getTime()), 0), activeStartedAt: workSessions.find((session) => !session.endedAt)?.startedAt ?? null }));
-  const activeTask = runningSession ? { id: runningSession.task!.id, title: runningSession.task!.title, activeStartedAt: runningSession.startedAt, actualMs: runningSession.task!.workSessions.reduce((sum, session) => sum + Math.max(0, (session.endedAt ?? now).getTime() - session.startedAt.getTime()), 0) } : taskRows.find((task) => task.activeStartedAt) ?? null;
-  const todayKey = dateKeyInZone(now, settings?.timezone ?? "Asia/Kolkata");
-  const deadlineWindows = taskDeadlineWindows(now, settings?.timezone ?? "Asia/Kolkata");
-  const historyDate = filters.historyDate && isValidDateKey(filters.historyDate) ? filters.historyDate : todayKey;
-  const todayTrackedMs = tasks.flatMap((task) => task.workSessions).filter((session) => session.attendance.attendanceDate.toISOString().slice(0, 10) === todayKey).reduce((sum, session) => sum + Math.max(0, (session.endedAt ?? now).getTime() - session.startedAt.getTime()), 0);
+  const taskRows = tasks.map(({ workSessions, ...task }) => ({ ...task, hasSessions: workSessions.length > 0, actualMs: workSessions.reduce((sum, session) => sum + Math.max(0, (session.endedAt ?? now).getTime() - session.startedAt.getTime()), 0) }));
+  const policy = settings ?? ORGANIZATION_SETTINGS_DEFAULTS;
+  const todayKey = dateKeyInZone(now, policy.timezone);
+  const currentWorkday = attendanceWorkdayKey(now, policy.timezone, policy.workdayStart, policy.workdayEnd, policy.overnightShiftEnabled);
+  const workDate = officeSession?.attendance.attendanceDate.toISOString().slice(0, 10) ?? currentWorkday;
+  const deadlineWindows = taskDeadlineWindows(now, policy.timezone);
+  const historyDate = filters.historyDate && isValidDateKey(filters.historyDate) ? filters.historyDate : workDate;
+  const workdaySessions = await prisma.workSession.findMany({
+    where: { organizationId: organization.id, userId: user.id, taskId: { not: null }, attendance: { attendanceDate: databaseDate(workDate) } },
+    select: { startedAt: true, endedAt: true },
+  });
+  const trackedMs = (sessions: { startedAt: Date; endedAt: Date | null }[]) => sessions.reduce((sum, session) => sum + Math.max(0, (session.endedAt ?? now).getTime() - session.startedAt.getTime()), 0);
+  const todayTrackedMs = trackedMs(workdaySessions);
+  const active = runningSession?.task ? {
+    sessionId: runningSession.id,
+    taskId: runningSession.task.id,
+    title: runningSession.task.title,
+    startedAt: runningSession.startedAt.toISOString(),
+    totalMsAtServer: trackedMs(runningSession.task.workSessions),
+  } : null;
   const sessionHistory = historySessions.filter((session) => session.attendance.attendanceDate.toISOString().slice(0, 10) === historyDate).map((session) => ({ ...session, taskTitle: session.task?.title ?? "Archived task" }));
   const today = taskRows.filter((task) => task.status !== "COMPLETED" && task.dueAt && task.dueAt < deadlineWindows.today.end);
   const upcoming = taskRows.filter((task) => task.status !== "COMPLETED" && (!task.dueAt || task.dueAt >= deadlineWindows.today.end));
@@ -44,9 +59,9 @@ export default async function EmployeeTasksPage({ searchParams }: { searchParams
   const taskDetails = detail ? taskDetailsData(detail, activity, settings?.timezone ?? "Asia/Kolkata") : null;
 
   return <div className="space-y-6"><section><h1 className="text-3xl font-semibold tracking-[-0.045em] text-[#172033]">My tasks</h1><p className="mt-2 text-sm text-[#667085]">Focus on what is due now, then keep the rest of your queue moving.</p></section>
-    <ActiveTaskTimer organizationId={organization.id} initialNow={now.toISOString()} checkedIn={Boolean(officeSession)} onBreak={Boolean(activeBreak)} active={activeTask?.activeStartedAt ? { taskId: activeTask.id, title: activeTask.title, startedAt: activeTask.activeStartedAt.toISOString(), totalMsAtServer: activeTask.actualMs } : null} tasks={taskRows.filter((task) => task.status !== "COMPLETED").map((task) => ({ id: task.id, title: task.title, estimatedMins: task.estimatedMins, totalMs: task.actualMs, hasSessions: task.hasSessions }))} />
-    <section className="grid gap-3 sm:grid-cols-3"><MiniStat label="Due today" value={today.length} tone="#2563eb" /><MiniStat label="Tracked today" value={formatMilliseconds(todayTrackedMs)} tone="#7251c9" /><MiniStat label="Completed" value={completed.length} tone="#1f9d74" /></section>
-    <form className="flex flex-col gap-3 rounded-2xl border border-[#e6eaf0] bg-white p-4 sm:flex-row"><label className="relative flex-1"><span className="sr-only">Search my tasks</span><Icon name="search" className="absolute left-3.5 top-3.5 size-4 text-[#98a2b3]" /><input name="q" defaultValue={q} placeholder="Search my tasks" className="h-11 w-full rounded-xl border border-[#dfe4eb] pl-10 pr-3 text-sm outline-none focus:border-[#80a7f5]" /></label><select name="status" defaultValue={validStatus || ""} className="h-11 rounded-xl border border-[#dfe4eb] bg-white px-3 text-sm text-[#475467]"><option value="">All statuses</option><option value="TODO">To do</option><option value="IN_PROGRESS">In progress</option><option value="BLOCKED">Blocked</option><option value="REVIEW">In review</option><option value="COMPLETED">Completed</option></select><button className="h-11 rounded-xl bg-[#172033] px-5 text-sm font-semibold text-white">Filter</button><Link href="/employee/tasks" className="grid size-11 place-items-center rounded-xl border border-[#dfe4eb] text-[#667085]" aria-label="Clear filters"><Icon name="x" className="size-4" /></Link></form>
+    <ActiveTaskTimer organizationId={organization.id} initialNow={now.toISOString()} checkedIn={Boolean(officeSession)} onBreak={Boolean(activeBreak)} active={active} tasks={taskRows.filter((task) => task.status !== "COMPLETED").map((task) => ({ id: task.id, title: task.title, estimatedMins: task.estimatedMins, totalMs: task.actualMs, hasSessions: task.hasSessions }))} />
+    <section className="grid gap-3 sm:grid-cols-3"><MiniStat label="Due today" value={today.length} tone="#2563eb" /><MiniStat label="Tracked this workday" value={formatMilliseconds(todayTrackedMs)} tone="#7251c9" /><MiniStat label="Completed" value={completed.length} tone="#1f9d74" /></section>
+    <form className="flex flex-col gap-3 rounded-2xl border border-[#e6eaf0] bg-white p-4 sm:flex-row"><label className="relative flex-1"><span className="sr-only">Search my tasks</span><Icon name="search" className="absolute left-3.5 top-3.5 size-4 text-[#98a2b3]" /><input name="q" defaultValue={q} placeholder="Search my tasks" className="h-11 w-full rounded-xl border border-[#dfe4eb] pl-10 pr-3 text-sm outline-none focus:border-[#80a7f5]" /></label><select aria-label="Task status filter" name="status" defaultValue={validStatus || ""} className="h-11 rounded-xl border border-[#dfe4eb] bg-white px-3 text-sm text-[#475467]"><option value="">All statuses</option><option value="TODO">To do</option><option value="IN_PROGRESS">In progress</option><option value="BLOCKED">Blocked</option><option value="REVIEW">In review</option><option value="COMPLETED">Completed</option></select><button className="h-11 rounded-xl bg-[#172033] px-5 text-sm font-semibold text-white">Filter</button><Link href="/employee/tasks" className="grid size-11 place-items-center rounded-xl border border-[#dfe4eb] text-[#667085]" aria-label="Clear filters"><Icon name="x" className="size-4" /></Link></form>
     <TaskSection timezone={settings?.timezone ?? "Asia/Kolkata"} title="Today’s tasks" subtitle="Due or overdue" tasks={today} />
     <TaskSection timezone={settings?.timezone ?? "Asia/Kolkata"} title="Upcoming" subtitle="Planned after today" tasks={upcoming} />
     {completed.length ? <TaskSection timezone={settings?.timezone ?? "Asia/Kolkata"} title="Completed" subtitle="Recently delivered" tasks={completed} /> : null}
