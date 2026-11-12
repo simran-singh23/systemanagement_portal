@@ -225,7 +225,7 @@ async function main() {
       update: { score: 4, mood: "GOOD" },
       create: { id: ids.pulse, organizationId: ids.organization, teamId: ids.teamDesign, userId: ids.employee, pulseDate: startOfToday, score: 4, mood: "GOOD", note: "Clear priorities and good momentum." },
     });
-  });
+  }, { maxWait: 30_000, timeout: 120_000 });
 
   console.log(productionDemoInitialization
     ? "Fictional showcase data and demo accounts initialized in the confirmed empty database. DEMO_ACCOUNT_PASSWORD was not printed."
