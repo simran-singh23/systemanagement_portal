@@ -3,8 +3,17 @@ import { PrismaPg } from "@prisma/adapter-pg";
 import { PrismaClient } from "@prisma/client";
 import { hashPassword, newPasswordSchema } from "../lib/password";
 
-if (process.env.NODE_ENV === "production" || process.env.VERCEL_ENV === "production") {
-  throw new Error("Development seed data must never run against a production environment.");
+const productionEnvironment = process.env.NODE_ENV === "production" || process.env.VERCEL_ENV === "production";
+const productionDemoInitialization = process.argv.includes("--initialize-demo");
+
+if (productionEnvironment && !productionDemoInitialization) {
+  throw new Error("Development seed data must never run against a production environment. Use the separately guarded demo initializer only for a fresh showcase database.");
+}
+if (productionDemoInitialization && !productionEnvironment) {
+  throw new Error("The demo initializer is only for an explicitly configured production showcase environment.");
+}
+if (productionDemoInitialization && process.env.DEMO_INITIALIZER_CONFIRM !== "CREATE_FICTIONAL_DEMO_ON_EMPTY_DATABASE") {
+  throw new Error("Set DEMO_INITIALIZER_CONFIRM=CREATE_FICTIONAL_DEMO_ON_EMPTY_DATABASE to confirm this one-time fictional demo initialization.");
 }
 
 const connectionString = process.env.DATABASE_URL;
@@ -51,14 +60,30 @@ const plusDays = (days: number) => {
 };
 
 // Optional local login for the demo users, so development works without Google OAuth or Resend.
-const devPassword = process.env.SEED_DEV_PASSWORD?.trim();
-if (devPassword && !newPasswordSchema.safeParse(devPassword).success) {
-  throw new Error("SEED_DEV_PASSWORD must be at least 12 characters.");
+const seedPassword = (productionDemoInitialization ? process.env.DEMO_ACCOUNT_PASSWORD : process.env.SEED_DEV_PASSWORD)?.trim();
+if (productionDemoInitialization && !seedPassword) {
+  throw new Error("DEMO_ACCOUNT_PASSWORD is required for the one-time production demo initializer.");
+}
+if (seedPassword && !newPasswordSchema.safeParse(seedPassword).success) {
+  throw new Error(`${productionDemoInitialization ? "DEMO_ACCOUNT_PASSWORD" : "SEED_DEV_PASSWORD"} must meet the password policy (at least 12 characters).`);
 }
 
 async function main() {
-  const devPasswordHash = devPassword ? await hashPassword(devPassword) : undefined;
+  const seedPasswordHash = seedPassword ? await hashPassword(seedPassword) : undefined;
   await prisma.$transaction(async (tx) => {
+    if (productionDemoInitialization) {
+      // Serialize initializers and block account/tenant creation between the
+      // freshness check and fixture writes.
+      await tx.$executeRaw`LOCK TABLE "users", "organizations" IN ACCESS EXCLUSIVE MODE`;
+      const [userCount, organizationCount] = await Promise.all([
+        tx.user.count(),
+        tx.organization.count(),
+      ]);
+      if (userCount !== 0 || organizationCount !== 0) {
+        throw new Error("Demo initialization requires a fresh database with no users or organizations; no changes were made.");
+      }
+    }
+
     const users = [
       { id: ids.superAdmin, name: "Riya Sharma", email: "admin@teamflow.dev", role: "SUPER_ADMIN" as const, jobTitle: "Platform administrator" },
       { id: ids.manager, name: "Aarav Mehta", email: "manager@teamflow.dev", role: "PRODUCT_MANAGER" as const, jobTitle: "Product manager" },
@@ -68,7 +93,7 @@ async function main() {
     ];
 
     for (const user of users) {
-      const login = devPasswordHash ? { passwordHash: devPasswordHash } : {};
+      const login = seedPasswordHash ? { passwordHash: seedPasswordHash } : {};
       await tx.user.upsert({
         where: { email: user.email },
         update: { id: user.id, name: user.name, role: user.role, status: "ACTIVE", jobTitle: user.jobTitle, emailVerified: startOfToday, ...login },
@@ -202,7 +227,9 @@ async function main() {
     });
   });
 
-  console.log("TeamFlow development seed completed.");
+  console.log(productionDemoInitialization
+    ? "Fictional showcase data and demo accounts initialized in the confirmed empty database. DEMO_ACCOUNT_PASSWORD was not printed."
+    : "TeamFlow development seed completed.");
 }
 
 main()

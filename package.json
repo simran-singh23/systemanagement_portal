@@ -2,6 +2,7 @@
   "name": "team-management-portal",
   "version": "0.1.0",
   "private": true,
+  "packageManager": "pnpm@10.34.9",
   "scripts": {
     "dev": "next dev",
     "inngest:dev": "npx --ignore-scripts=false inngest-cli@latest dev --no-discovery -u http://localhost:3000/api/inngest",
@@ -24,6 +25,7 @@
     "db:migrate": "prisma migrate dev",
     "db:deploy": "prisma migrate deploy",
     "db:seed": "prisma db seed",
+    "db:demo-init": "tsx prisma/seed.ts --initialize-demo",
     "admin:bootstrap": "tsx scripts/bootstrap-admin.ts",
     "org:bootstrap-admin": "tsx scripts/provision-organization-admin.ts",
     "db:studio": "prisma studio",

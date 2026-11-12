@@ -83,13 +83,13 @@ Before the first production migration:
 DIRECT_URL="$DIRECT_URL" npm run db:deploy
 ```
 
-Never run `prisma migrate reset`, `prisma db push`, or `npm run db:seed` in production. The seed script now refuses to run when `NODE_ENV=production` or `VERCEL_ENV=production`.
+Never run `prisma migrate reset`, `prisma db push`, or `npm run db:seed` in production. The development seed refuses production mode. A separate one-time fictional showcase initializer exists as `npm run db:demo-init -- --initialize-demo`; it requires the explicit `DEMO_INITIALIZER_CONFIRM` value, `DEMO_ACCOUNT_PASSWORD`, and an empty database. Review [the database migration plan](docs/DATABASE_MIGRATION_PLAN.md) and decide demo credential disclosure/reset before use. Do not leave the confirmation variable configured after initialization.
 
 `prisma migrate deploy` applies pending migrations but does not detect drift. Compare migration status and validate a restored copy before release: <https://docs.prisma.io/docs/cli/migrate/deploy>.
 
 ## Vercel setup
 
-No Vercel project is linked. The checkout has a GitHub remote, and local changes need review and a commit before deployment. An authorized operator must:
+The user has a Vercel account, but this checkout has no linked Vercel project configuration yet. The checkout has a GitHub remote, and local changes need review and a commit before deployment. An authorized operator must:
 
 1. Push the reviewed repository to the approved Git provider.
 2. Import it once into Vercel; avoid creating a duplicate project.
