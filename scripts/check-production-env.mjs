@@ -1,6 +1,5 @@
 const required = [
   "DATABASE_URL",
-  "DIRECT_URL",
   "AUTH_SECRET",
   "AUTH_URL",
   "AUTH_TRUST_HOST",
@@ -25,8 +24,10 @@ for (const key of required) {
   else if (placeholderPattern.test(value)) errors.push(`${key} still contains a placeholder value.`);
 }
 
-function validateDatabaseUrl(key) {
-  const value = process.env[key];
+const directDatabaseUrl = process.env.DIRECT_URL?.trim() || process.env.DATABASE_URL_UNPOOLED?.trim();
+if (!directDatabaseUrl) errors.push("DIRECT_URL or DATABASE_URL_UNPOOLED is missing.");
+
+function validateDatabaseUrl(key, value = process.env[key]) {
   if (!value) return;
   try {
     const url = new URL(value);
@@ -42,7 +43,7 @@ function validateDatabaseUrl(key) {
 }
 
 validateDatabaseUrl("DATABASE_URL");
-validateDatabaseUrl("DIRECT_URL");
+if (directDatabaseUrl) validateDatabaseUrl("DIRECT_URL", directDatabaseUrl);
 
 if (process.env.AUTH_SECRET && process.env.AUTH_SECRET.length < 32) errors.push("AUTH_SECRET must be at least 32 characters.");
 if (process.env.AUTH_TRUST_HOST && process.env.AUTH_TRUST_HOST !== "true") errors.push("AUTH_TRUST_HOST must be true behind the production proxy.");
@@ -69,4 +70,4 @@ if (errors.length) {
   process.exit(1);
 }
 
-console.log(`Production environment check passed (${required.length} required variables validated; secret values were not printed).`);
+console.log(`Production environment check passed (${required.length + 1} required variables validated; secret values were not printed).`);

@@ -23,7 +23,7 @@ Configure secrets in Vercel Project Settings, separately for Development, Previe
 | Variable | Required | Scope | Purpose |
 | --- | --- | --- | --- |
 | `DATABASE_URL` | Yes | Server only | Pooled, TLS-enabled PostgreSQL URL for runtime traffic |
-| `DIRECT_URL` | Yes | CI/release only | Direct, TLS-enabled PostgreSQL URL for migrations and backup tools |
+| `DIRECT_URL` or `DATABASE_URL_UNPOOLED` | Yes | CI/release only | Direct, TLS-enabled PostgreSQL URL for migrations and backup tools; Neon provides `DATABASE_URL_UNPOOLED` |
 | `AUTH_SECRET` | Yes | Server only | Random value of at least 32 characters for Auth.js tokens/cookies |
 | `AUTH_URL` | Yes by TeamFlow policy | Server only | Canonical HTTPS production origin |
 | `AUTH_TRUST_HOST` | Yes | Server only | `true` behind Vercel's trusted reverse proxy |
@@ -52,7 +52,7 @@ The production environment validator checks Resend variables as a group if any a
 1. Create a new managed PostgreSQL project; do not reuse local or preview databases.
 2. Choose a region close to the Vercel function region.
 3. Create dedicated production credentials and enable TLS.
-4. Put the provider's pooled URL in `DATABASE_URL` and direct URL in `DIRECT_URL`.
+4. Put the provider's pooled URL in `DATABASE_URL` and direct URL in `DIRECT_URL` or Neon’s `DATABASE_URL_UNPOOLED`.
 5. Confirm connection and transaction limits for expected Vercel concurrency.
 6. Enable point-in-time recovery or provider backups and record retention/restore limits.
 7. Restrict console and credential access to release operators; rotate credentials after personnel or incident changes.
