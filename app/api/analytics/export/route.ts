@@ -4,6 +4,8 @@ import { getAnalyticsDashboard } from "@/lib/analytics/queries";
 import { analyticsTableColumns, serializeAnalyticsCsv } from "@/lib/analytics/csv";
 import { AnalyticsFilterError, AnalyticsScopeError } from "@/lib/analytics/filters";
 
+export const dynamic = "force-dynamic";
+
 const datasetSchema = z.enum(["attendance", "tasks", "hours", "reports"]);
 export async function GET(request: Request) {
   const url = new URL(request.url); const parsed = datasetSchema.safeParse(url.searchParams.get("dataset"));
