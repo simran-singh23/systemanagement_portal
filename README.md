@@ -75,6 +75,18 @@ npm run db:seed       # load repeatable development data
 npm run db:studio     # inspect data in Prisma Studio
 ```
 
+## CI and deployment
+
+The application and its backend (Next.js pages, route handlers, and server actions) are deployed together on Vercel. The live app is [systemanagement-portal-wpe7.vercel.app](https://systemanagement-portal-wpe7.vercel.app); production data is stored in Neon Postgres. There is no separate API server to deploy.
+
+GitHub Actions runs the `Quality` workflow on branch pushes, pull requests targeting `main`, and manual dispatch. It installs the locked pnpm version and checks Prisma generation/schema validity, lint, types, unit tests, migration static checks, and the production build. It uses a placeholder local database URL and does not connect to Neon.
+
+Vercel's existing Git integration provides continuous deployment: pushes to non-production branches get Preview deployments, and updates to `main` get Production deployments. No Vercel token or second deploy workflow is needed. The Vercel project should keep `main` as its Production Branch.
+
+**Database migrations are deliberately not part of automatic deployment.** Migration history and the safe clean-install path are unresolved; do not add `prisma migrate deploy` to CI or Vercel until the migration owners have completed the review in [the migration next steps](docs/MIGRATION_NEXT_STEPS.md).
+
+To require the GitHub check before changes enter production, add a GitHub ruleset for `main` that requires the `Quality / quality` status check and merge through pull requests. If you instead want direct pushes to `main` but to hold Vercel's production promotion until CI passes, configure that check under the Vercel project's **Settings → Deployment Checks**. Avoid enabling both gates together: Vercel documents a GitHub check-run interaction between branch protection and Deployment Checks.
+
 ## Authorization
 
 Roles are `SUPER_ADMIN`, `PRODUCT_MANAGER`, `TEAM_LEAD`, and `EMPLOYEE`.
