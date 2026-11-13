@@ -22,7 +22,7 @@ type AppShellProps = {
   children: ReactNode;
   role: "manager" | "employee";
   user: ShellUser;
-  notificationPreview: { notifications: NotificationDTO[]; unreadCount: number };
+  notificationPreview?: { notifications: NotificationDTO[]; unreadCount: number };
 };
 
 export function AppShell({ children, role, user, notificationPreview }: AppShellProps) {
@@ -40,7 +40,7 @@ export function AppShell({ children, role, user, notificationPreview }: AppShell
     <div className="min-h-screen bg-[var(--canvas)]">
       <Sidebar role={role} userRole={user.role} pathname={pathname} mobileOpen={mobileOpen} collapsed={collapsed} onToggleCollapsed={toggleCollapsed} onClose={closeMobile} />
       <div className={`transition-[padding] duration-200 ease-out ${collapsed ? "lg:pl-[5.25rem]" : "lg:pl-[17rem]"}`}>
-        <TopNav user={user} pathname={pathname} notificationPreview={notificationPreview} onMenuClick={() => setMobileOpen(true)} />
+        <TopNav user={user} pathname={pathname} notificationPreview={notificationPreview ?? { notifications: [], unreadCount: 0 }} onMenuClick={() => setMobileOpen(true)} />
         <main id="main-content" className="mx-auto w-full max-w-[1480px] overflow-x-clip p-4 sm:p-6 lg:p-8">{children}</main>
       </div>
     </div>

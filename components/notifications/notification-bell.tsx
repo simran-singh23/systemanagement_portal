@@ -12,21 +12,39 @@ import type { NotificationDTO } from "@/lib/notifications";
 
 type Preview = { notifications: NotificationDTO[]; unreadCount: number };
 const POLL_INTERVAL_MS = 30_000;
+const EMPTY_PREVIEW: Preview = { notifications: [], unreadCount: 0 };
 
-export function NotificationBell({ initialPreview }: { initialPreview: Preview }) {
+export function NotificationBell({ initialPreview = EMPTY_PREVIEW }: { initialPreview?: Preview }) {
   const [open, setOpen] = useState(false);
   const [preview, setPreview] = useState(initialPreview);
   const [, startTransition] = useTransition();
   const menuRef = useRef<HTMLDivElement>(null);
+  const refreshInFlight = useRef<Promise<void> | null>(null);
+  const lastRefreshAt = useRef(0);
   const router = useRouter();
   const refreshPreview = useCallback(async (signal?: AbortSignal) => {
     if (document.visibilityState !== "visible") return;
-    const response = await fetch("/api/notifications/summary", { cache: "no-store", signal });
-    if (response.ok) setPreview(await response.json() as Preview);
+    if (refreshInFlight.current) return refreshInFlight.current;
+    if (Date.now() - lastRefreshAt.current < 10_000) return;
+    lastRefreshAt.current = Date.now();
+    const request = (async () => {
+      try {
+        const response = await fetch("/api/notifications/summary", { cache: "no-store", signal });
+        if (response.ok) setPreview(await response.json() as Preview);
+      } catch {
+        // Keep the last known notification state when the background refresh fails.
+      }
+    })();
+    const tracked = request.finally(() => {
+      if (refreshInFlight.current === tracked) refreshInFlight.current = null;
+    });
+    refreshInFlight.current = tracked;
+    return tracked;
   }, []);
 
   useEffect(() => {
     const controller = new AbortController();
+    void refreshPreview(controller.signal);
     const interval = window.setInterval(() => { void refreshPreview(controller.signal); }, POLL_INTERVAL_MS);
     const onFocus = () => { void refreshPreview(controller.signal); };
     const onVisibility = () => { if (document.visibilityState === "visible") void refreshPreview(controller.signal); };

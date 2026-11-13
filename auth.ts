@@ -85,7 +85,7 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
       if (userId) {
         let dbUser = await prisma.user.findUnique({
           where: { id: String(userId) },
-          select: { id: true, role: true, status: true, authVersion: true, emailVerified: true },
+          select: { id: true, name: true, email: true, image: true, role: true, status: true, authVersion: true, emailVerified: true },
         });
 
         // OAuth proves control of the account email, but not which of several
@@ -99,7 +99,7 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
             await tx.organizationMember.update({ where: { id: membershipId }, data: { status: "ACTIVE", joinedAt: new Date() } });
             await reconcileAccountAccess(tx, dbUser!.id);
           });
-          dbUser = await prisma.user.findUnique({ where: { id: String(userId) }, select: { id: true, role: true, status: true, authVersion: true, emailVerified: true } });
+          dbUser = await prisma.user.findUnique({ where: { id: String(userId) }, select: { id: true, name: true, email: true, image: true, role: true, status: true, authVersion: true, emailVerified: true } });
         }
 
         if (dbUser) {
@@ -109,6 +109,9 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
             return token;
           }
           token.userId = dbUser.id;
+          token.name = dbUser.name;
+          token.email = dbUser.email;
+          token.picture = dbUser.image;
           token.role = dbUser.role;
           token.status = dbUser.status;
           token.authVersion = dbUser.authVersion;
@@ -122,6 +125,9 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
         session.user.id = token.invalidated ? "" : (token.userId ?? token.sub) as string;
         session.user.role = (token.role ?? "EMPLOYEE") as UserRole;
         session.user.status = token.invalidated ? "SUSPENDED" : (token.status ?? "ACTIVE") as UserStatus;
+        session.user.name = typeof token.name === "string" ? token.name : null;
+        session.user.email = typeof token.email === "string" ? token.email : "";
+        session.user.image = typeof token.picture === "string" ? token.picture : null;
       }
       return session;
     },

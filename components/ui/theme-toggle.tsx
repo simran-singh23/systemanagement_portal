@@ -18,5 +18,5 @@ export function ThemeToggle() {
     localStorage.setItem("teamflow-theme", next);
     window.dispatchEvent(new Event(themeEvent));
   }
-  return <button type="button" onClick={toggleTheme} aria-label={dark ? "Use light theme" : "Use dark theme"} title={dark ? "Use light theme" : "Use dark theme"} className="tf-icon-button"><Icon name={dark ? "sun" : "moon"} className="size-[18px]" /></button>;
+  return <button type="button" onClick={toggleTheme} aria-label={dark ? "Use light theme" : "Use dark theme"} aria-pressed={dark} title={dark ? "Use light theme" : "Use dark theme"} className="tf-icon-button"><Icon name={dark ? "sun" : "moon"} className="size-[18px]" /></button>;
 }

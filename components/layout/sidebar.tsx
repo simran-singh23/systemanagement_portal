@@ -11,31 +11,28 @@ type NavItem = { label: string; href: string; icon: IconName; roles?: UserRole[]
 type NavGroup = { label: string; items: NavItem[] };
 
 const managerGroups: NavGroup[] = [
-  { label: "Workspace", items: [
+  { label: "Work", items: [
     { label: "Overview", href: "/dashboard", icon: "dashboard" },
     { label: "Tasks", href: "/dashboard/tasks", icon: "tasks" },
+    { label: "Daily reports", href: "/dashboard/reports", icon: "file" },
     { label: "Attendance", href: "/dashboard/attendance", icon: "calendar" },
     { label: "Time tracking", href: "/dashboard/time-tracking", icon: "clock" },
-    { label: "Daily reports", href: "/dashboard/reports", icon: "file" },
   ] },
-  { label: "Team management", items: [
+  { label: "People", items: [
     { label: "Employees", href: "/dashboard/employees", icon: "users", roles: ["SUPER_ADMIN", "PRODUCT_MANAGER"] },
     { label: "Teams", href: "/dashboard/teams", icon: "sparkle" },
     { label: "Leave requests", href: "/dashboard/leave", icon: "calendar" },
   ] },
-  { label: "Insights", items: [
+  { label: "Insights & settings", items: [
     { label: "Analytics", href: "/dashboard/analytics", icon: "analytics" },
     { label: "AI assistant", href: "/dashboard/ai-assistant", icon: "sparkle" },
-    { label: "Notifications", href: "/notifications", icon: "bell" },
-  ] },
-  { label: "Administration", items: [
     { label: "Automations", href: "/dashboard/automations", icon: "clock", roles: ["SUPER_ADMIN"] },
     { label: "Organization settings", href: "/dashboard/settings", icon: "settings", roles: ["SUPER_ADMIN"] },
   ] },
 ];
 
 const employeeGroups: NavGroup[] = [
-  { label: "Workspace", items: [
+  { label: "Work", items: [
     { label: "Overview", href: "/employee", icon: "dashboard" },
     { label: "My tasks", href: "/employee/tasks", icon: "tasks" },
     { label: "Attendance", href: "/employee/attendance", icon: "calendar" },
@@ -44,7 +41,6 @@ const employeeGroups: NavGroup[] = [
   ] },
   { label: "Insights", items: [
     { label: "My analytics", href: "/employee/analytics", icon: "analytics" },
-    { label: "Notifications", href: "/notifications", icon: "bell" },
   ] },
 ];
 

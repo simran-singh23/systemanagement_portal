@@ -1,8 +1,11 @@
 import type { Metadata } from "next";
 import Link from "next/link";
+import { redirect } from "next/navigation";
 import { loginWithGoogle } from "@/actions/auth.actions";
 import { Icon } from "@/components/ui/icons";
 import { GoogleSubmitButton, LoginForm } from "@/components/auth/login-form";
+import { getCurrentUser } from "@/lib/dal/auth";
+import { dashboardPathForRole } from "@/lib/permissions";
 
 export const metadata: Metadata = { title: "Sign in" };
 
@@ -10,6 +13,8 @@ export default async function Login({
   searchParams,
 }: PageProps<"/login">) {
   const { error, password } = await searchParams;
+  const user = await getCurrentUser();
+  if (user?.status === "ACTIVE") redirect(dashboardPathForRole(user.role));
 
   return (
     <main className="grid min-h-screen bg-white lg:grid-cols-[1.04fr_0.96fr]">

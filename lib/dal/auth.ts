@@ -11,7 +11,14 @@ import { hasApprovedOrganizationAccess } from "@/lib/member-access";
 export const getCurrentUser = cache(async () => {
   const session = await auth();
   if (!session?.user?.id) return null;
-  return prisma.user.findUnique({ where: { id: session.user.id }, select: { id: true, name: true, email: true, image: true, role: true, status: true } });
+  return {
+    id: session.user.id,
+    name: session.user.name ?? null,
+    email: session.user.email ?? "",
+    image: session.user.image ?? null,
+    role: session.user.role,
+    status: session.user.status,
+  };
 });
 
 export async function requireUser() { const user = await getCurrentUser(); if (!user || user.status !== "ACTIVE") redirect("/login"); return user; }
@@ -46,9 +53,14 @@ export async function requireOrganizationPermission(organizationId: string, perm
 
 export async function requireCurrentOrganization(permission: Permission) {
   const user = await requireUser();
-  const memberships = await prisma.organizationMember.findMany({ where: { userId: user.id, status: "ACTIVE" }, include: { organization: true }, orderBy: { createdAt: "asc" } });
+  const [memberships, ownedOrganization] = await Promise.all([
+    prisma.organizationMember.findMany({ where: { userId: user.id, status: "ACTIVE" }, include: { organization: true }, orderBy: { createdAt: "asc" } }),
+    user.role === "SUPER_ADMIN"
+      ? prisma.organization.findFirst({ where: { ownerId: user.id }, orderBy: { createdAt: "asc" } })
+      : Promise.resolve(null),
+  ]);
   if (user.role === "SUPER_ADMIN") {
-    const organization = await prisma.organization.findFirst({ where: { ownerId: user.id }, orderBy: { createdAt: "asc" } });
+    const organization = ownedOrganization;
     if (organization) {
       const ownedMembership = memberships.find((item) => item.organizationId === organization.id);
       return { user, organization, membership: ownedMembership ? { ...ownedMembership, role: "SUPER_ADMIN" as const } : null };

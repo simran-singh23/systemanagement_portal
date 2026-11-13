@@ -10,10 +10,10 @@ type StatCardProps = {
 };
 
 const accents = {
-  blue: "bg-[#eef4ff] text-[#2563eb]",
-  green: "bg-[#eaf8f2] text-[#16855b]",
-  amber: "bg-[#fff6e5] text-[#b16a00]",
-  violet: "bg-[#f3efff] text-[#7251c9]",
+  blue: "bg-[var(--blue-soft)] text-[var(--blue)]",
+  green: "bg-[var(--green-soft)] text-[var(--green)]",
+  amber: "bg-[var(--amber-soft)] text-[var(--amber)]",
+  violet: "bg-[var(--violet-soft)] text-[var(--violet)]",
 };
 
 export function StatCard({ label, value, detail, trend, icon, accent = "blue" }: StatCardProps) {
@@ -24,7 +24,7 @@ export function StatCard({ label, value, detail, trend, icon, accent = "blue" }:
       <div className="flex items-start justify-between">
         <span className={`grid size-10 place-items-center rounded-xl ${accents[accent]}`}><Icon name={icon} className="size-5" /></span>
         {trend && (
-          <span className={`flex items-center gap-1 rounded-full px-2 py-1 font-mono text-[11px] font-semibold ${trendPositive ? "bg-[#ecfdf3] text-[#16855b]" : "bg-[#fff1f0] text-[#c33b32]"}`}>
+          <span className={`flex items-center gap-1 rounded-full px-2 py-1 font-mono text-[11px] font-semibold ${trendPositive ? "bg-[var(--green-soft)] text-[var(--green)]" : "bg-[var(--danger-soft)] text-[var(--danger)]"}`}>
             <Icon name={trend.direction === "up" ? "arrowUp" : "arrowDown"} className="size-3" /> {trend.value}
           </span>
         )}
