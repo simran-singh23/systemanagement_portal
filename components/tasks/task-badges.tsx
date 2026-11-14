@@ -18,14 +18,14 @@ export const priorityLabels: Record<TaskPriority, string> = {
 
 export function StatusBadge({ status }: { status: TaskStatus }) {
   const tone: Record<TaskStatus, string> = {
-    TODO: "bg-[#f2f4f7] text-[#536071] ring-[#e0e4e9]",
-    IN_PROGRESS: "bg-[#eef4ff] text-[#2555a7] ring-[#d5e2fb]",
-    BLOCKED: "bg-[#fff1f0] text-[#a43b32] ring-[#f4d0cc]",
-    REVIEW: "bg-[#f5f0ff] text-[#6846a5] ring-[#e4d8fb]",
-    COMPLETED: "bg-[#ecfdf3] text-[#157357] ring-[#c8ebda]",
-    CANCELLED: "bg-[#f2f4f7] text-[#7c8799] ring-[#e0e4e9]",
+    TODO: "bg-[var(--surface-subtle)] text-[var(--muted)]",
+    IN_PROGRESS: "bg-[var(--amber-soft)] text-[var(--amber)]",
+    BLOCKED: "bg-[var(--danger-soft)] text-[var(--danger)]",
+    REVIEW: "bg-[var(--blue-soft)] text-[var(--blue)]",
+    COMPLETED: "bg-[var(--green-soft)] text-[var(--green)]",
+    CANCELLED: "bg-[var(--surface-subtle)] text-[var(--muted)]",
   };
-  return <span className={`inline-flex rounded-full px-2.5 py-1 text-[11px] font-semibold ring-1 ring-inset ${tone[status]}`}>{statusLabels[status]}</span>;
+  return <span className={`inline-flex shrink-0 items-center gap-1.5 rounded-md px-2 py-1 text-[11px] font-semibold ${tone[status]}`}><span aria-hidden="true" className="size-1.5 rounded-full bg-current" />{statusLabels[status]}</span>;
 }
 
 export function PriorityBadge({ priority }: { priority: TaskPriority }) {

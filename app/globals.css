@@ -1,58 +1,76 @@
 @import "tailwindcss";
 
 :root {
-  --canvas: #f5f7fb;
+  --canvas: #f8fafc;
   --surface: #ffffff;
-  --ink: #172033;
-  --muted: #667085;
-  --line: #e6eaf0;
-  --blue: #2563eb;
-  --blue-soft: #eef4ff;
-  --mint-soft: #eaf8f2;
-  --surface-subtle: #f8fafc;
+  --ink: #182230;
+  --muted: #475467;
+  --line: #e2e8f0;
+  --sidebar: #182230;
+  --sidebar-text: #d4dce7;
+  --sidebar-muted: #a8b6c8;
+  --sidebar-active: #315f8a;
+  --sidebar-hover: #243244;
+  --anchor: #182230;
+  --anchor-ink: #ffffff;
+  --anchor-muted: #c4d0de;
+  --chart-due: #c7d4e6;
+  --distribution-neutral: #182230;
+  --blue: #315f8a;
+  --blue-soft: #eaf0f6;
+  --mint-soft: #e9f1eb;
+  --surface-subtle: #f1f5f9;
   --surface-raised: #ffffff;
   --surface-translucent: rgba(255, 255, 255, 0.9);
-  --muted-2: #667085;
-  --blue-strong: #1d55c6;
+  --muted-2: #526174;
+  --button-primary: #315f8a;
+  --button-primary-ink: #ffffff;
+  --blue-strong: #274c70;
   --danger: #b42318;
   --danger-soft: #fff1f0;
-  --green: #16855b;
-  --green-soft: #eaf8f2;
-  --amber: #a86708;
-  --amber-soft: #fff6e5;
-  --violet: #7251c9;
-  --violet-soft: #f3efff;
-  --radius-card: 1rem;
+  --green: #367455;
+  --green-soft: #e9f1eb;
+  --amber: #9a641d;
+  --amber-soft: #f5efdf;
+  --violet: #655e79;
+  --violet-soft: #efedf2;
+  --radius-card: .75rem;
 }
 
 .dark {
-  --canvas: #0b1120;
-  --surface: #111827;
-  --surface-raised: #182235;
-  --surface-subtle: #172033;
-  --surface-translucent: rgba(17, 24, 39, 0.9);
-  --ink: #edf2f8;
-  --muted: #aab4c3;
-  --muted-2: #aab4c3;
-  --line: #293449;
-  --blue: #6f9cff;
-  --blue-strong: #9bbaff;
-  --blue-soft: #172b50;
-  --mint-soft: #10362d;
+  --canvas: #0f1218;
+  --surface: #191e27;
+  --surface-raised: #242c38;
+  --surface-subtle: #242c38;
+  --surface-translucent: rgba(25, 30, 39, 0.94);
+  --sidebar: #141a23;
+  --anchor: #243449;
+  --chart-due: #566b85;
+  --distribution-neutral: #a6b1c1;
+  --ink: #f2f4f7;
+  --muted: #c0c8d4;
+  --muted-2: #a6b1c1;
+  --line: #363d49;
+  --button-primary: #90b9e2;
+  --button-primary-ink: #101d2c;
+  --blue: #8eb3d5;
+  --blue-strong: #b4cde3;
+  --blue-soft: #293746;
+  --mint-soft: #293b30;
   --danger: #ff938c;
   --danger-soft: #3b2429;
-  --green: #5ed3a5;
-  --green-soft: #17382f;
-  --amber: #f0bd69;
-  --amber-soft: #3b3020;
-  --violet: #bea5ff;
-  --violet-soft: #2d2740;
+  --green: #91c3a0;
+  --green-soft: #293b30;
+  --amber: #d6b66e;
+  --amber-soft: #3a3425;
+  --violet: #b7aec6;
+  --violet-soft: #35313c;
 }
 
 @theme inline {
   --color-background: var(--canvas);
   --color-foreground: var(--ink);
-  --font-sans: "Avenir Next", "Segoe UI", Arial, sans-serif;
+  --font-sans: var(--font-inter), "Segoe UI", Arial, sans-serif;
   --font-mono: "SFMono-Regular", Consolas, "Liberation Mono", monospace;
 }
 
@@ -97,6 +115,24 @@ textarea:disabled { cursor: not-allowed; opacity: .6; }
 .tf-page-title { color: var(--ink); font-size: clamp(1.75rem, 3vw, 2.125rem); font-weight: 650; letter-spacing: -.045em; line-height: 1.15; }
 .tf-page-description { margin-top: .5rem; max-width: 48rem; color: var(--muted); font-size: .875rem; line-height: 1.5rem; }
 
+.tf-dashboard-hero {
+  display: flex;
+  min-height: 10rem;
+  flex-direction: column;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 1.25rem;
+  overflow: hidden;
+  border: 1px solid #d3e1f0;
+  border-radius: 1rem;
+  background: radial-gradient(ellipse at 92% 10%, rgba(175, 205, 237, .44), transparent 32%), linear-gradient(112deg, #e8f1fb 0%, #f4f8fd 62%, #e2edf9 100%);
+  padding: 1.5rem;
+}
+
+@media (min-width: 640px) {
+  .tf-dashboard-hero { min-height: 11rem; flex-direction: row; align-items: center; padding: 1.75rem 2rem; }
+}
+
 .tf-icon-button {
   display: grid;
   width: 2.75rem;
@@ -111,6 +147,10 @@ textarea:disabled { cursor: not-allowed; opacity: .6; }
 }
 .tf-icon-button:hover { border-color: color-mix(in srgb, var(--blue) 30%, var(--line)); background: var(--surface-subtle); color: var(--ink); }
 
+@media (min-width: 1024px) {
+  .tf-icon-button.lg\:hidden { display: none; }
+}
+
 .tf-button-primary {
   display: inline-flex;
   min-height: 2.75rem;
@@ -118,9 +158,9 @@ textarea:disabled { cursor: not-allowed; opacity: .6; }
   justify-content: center;
   gap: .5rem;
   border-radius: .75rem;
-  background: var(--blue);
+  background: var(--button-primary);
   padding: .625rem 1rem;
-  color: white;
+  color: var(--button-primary-ink);
   font-size: .875rem;
   font-weight: 650;
   transition: filter 160ms ease, transform 160ms ease;
@@ -188,6 +228,7 @@ h4,
 h5,
 h6 {
   scroll-margin-top: 5rem;
+  font-family: var(--font-jakarta), var(--font-sans);
 }
 
 ::selection {

@@ -39,7 +39,7 @@ export function AppShell({ children, role, user, notificationPreview }: AppShell
   return (
     <div className="min-h-screen bg-[var(--canvas)]">
       <Sidebar role={role} userRole={user.role} pathname={pathname} mobileOpen={mobileOpen} collapsed={collapsed} onToggleCollapsed={toggleCollapsed} onClose={closeMobile} />
-      <div className={`transition-[padding] duration-200 ease-out ${collapsed ? "lg:pl-[5.25rem]" : "lg:pl-[17rem]"}`}>
+      <div className={`transition-[padding] duration-200 ease-out ${collapsed ? "lg:pl-[5.25rem]" : "lg:pl-[16rem]"}`}>
         <TopNav user={user} pathname={pathname} notificationPreview={notificationPreview ?? { notifications: [], unreadCount: 0 }} onMenuClick={() => setMobileOpen(true)} />
         <main id="main-content" className="mx-auto w-full max-w-[1480px] overflow-x-clip p-4 sm:p-6 lg:p-8">{children}</main>
       </div>

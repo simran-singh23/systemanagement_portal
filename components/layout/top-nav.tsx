@@ -25,10 +25,10 @@ function breadcrumb(pathname: string) {
 export function TopNav({ user, pathname, notificationPreview, onMenuClick }: TopNavProps) {
   const displayName = user.name || user.email;
   const crumbs = breadcrumb(pathname);
-  return <header className="sticky top-0 z-30 flex h-[4.5rem] items-center gap-2 border-b border-[var(--line)] bg-[color:var(--surface-translucent)] px-4 backdrop-blur-xl sm:gap-3 sm:px-6 lg:px-8">
+  return <header className="sticky top-0 z-30 flex h-16 items-center gap-2 border-b border-[var(--line)] bg-[color:var(--surface-translucent)] px-4 backdrop-blur-xl sm:gap-3 sm:px-6 lg:px-8">
     <a href="#main-content" className="sr-only focus:not-sr-only focus:absolute focus:left-4 focus:top-3 focus:z-[100] focus:rounded-lg focus:bg-[var(--ink)] focus:px-3 focus:py-2 focus:text-sm focus:text-[var(--surface)]">Skip to content</a>
     <button type="button" aria-label="Open navigation" onClick={onMenuClick} className="tf-icon-button lg:hidden"><Icon name="menu" className="size-5" /></button>
-    <div className="hidden min-w-40 lg:block"><p className="text-[11px] text-[var(--muted-2)]">{crumbs.root}</p><p className="mt-0.5 truncate text-sm font-semibold text-[var(--ink)]">{crumbs.current}</p></div>
+    <div className="sr-only"><p className="text-[11px] text-[var(--muted-2)]">{crumbs.root}</p><p className="mt-0.5 truncate text-sm font-semibold text-[var(--ink)]">{crumbs.current}</p></div>
     <GlobalSearch />
     <div className="ml-auto flex items-center gap-1.5 sm:gap-2">
       <ThemeToggle />

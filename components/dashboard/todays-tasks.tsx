@@ -3,6 +3,7 @@ import Link from "next/link";
 import { EmptyState } from "@/components/ui/empty-state";
 
 export type TaskItem = {
+  id?: string;
   title: string;
   project: string;
   time: string;
@@ -23,25 +24,25 @@ export function TodaysTasks({ items, title = "Today’s tasks", href = "/dashboa
   const completion = items.length ? Math.round((completeCount / items.length) * 100) : 0;
 
   return (
-    <section className="overflow-hidden rounded-2xl border border-[var(--line)] bg-[var(--surface)]">
+    <section className="overflow-hidden rounded-[.875rem] border border-[var(--line)] bg-[var(--surface)]">
       <div className="border-b border-[var(--line)] px-5 py-4 sm:px-6">
         <div className="flex items-center justify-between gap-3">
           <div>
-            <h2 className="text-base font-semibold tracking-[-0.02em] text-[#172033]">{title}</h2>
+            <h2 className="text-base font-semibold tracking-[-0.02em] text-[var(--ink)]">{title}</h2>
             <p className="mt-1 text-xs text-[var(--muted)]">{completeCount} of {items.length} complete</p>
           </div>
-          <span className="font-mono text-sm font-semibold text-[#2563eb]">{completion}%</span>
+          {items.length > 0 && <span className="font-mono text-sm font-semibold text-[var(--blue)]">{completion}%</span>}
         </div>
         <div className="mt-3 h-1.5 overflow-hidden rounded-full bg-[var(--surface-subtle)]"><div className="h-full rounded-full bg-[var(--blue)]" style={{ width: `${completion}%` }} /></div>
       </div>
       {items.length ? <div className="divide-y divide-[var(--line)] px-5 sm:px-6">
         {items.map((task) => (
-          <div key={task.title} className="group flex items-start gap-3 py-4">
+          <div key={task.id ?? task.title} className="group flex items-start gap-3 py-4">
             <span aria-label={task.done ? "Completed" : "Not completed"} className={`mt-0.5 grid size-5 shrink-0 place-items-center rounded-md border ${task.done ? "border-[var(--blue)] bg-[var(--blue)] text-white" : "border-[var(--line)] bg-[var(--surface)] text-transparent"}`}>
               <Icon name="check" className="size-3" />
             </span>
             <div className="min-w-0 flex-1">
-              <p className={`text-sm font-medium ${task.done ? "text-[var(--muted-2)] line-through" : "text-[var(--ink)]"}`}>{task.title}</p>
+              <p className={`text-sm font-medium ${task.done ? "text-[var(--muted-2)] line-through" : "text-[var(--ink)]"}`}>{task.id ? <Link href={`${href}?task=${task.id}`} className="hover:text-[var(--blue)]">{task.title}</Link> : task.title}</p>
               <div className="mt-1.5 flex flex-wrap items-center gap-2 text-[11px] text-[var(--muted-2)]">
                 <span>{task.project}</span><span className="size-1 rounded-full bg-[var(--line)]" /><span className="flex items-center gap-1"><Icon name="clock" className="size-3" />{task.time}</span>
               </div>
@@ -51,7 +52,7 @@ export function TodaysTasks({ items, title = "Today’s tasks", href = "/dashboa
         ))}
       </div> : <EmptyState title="No tasks due today" description="New assignments and deadlines will appear here." icon="tasks" />}
       <Link href={href} className="flex min-h-11 w-full items-center justify-center gap-1.5 border-t border-[var(--line)] px-5 py-3 text-xs font-semibold text-[var(--blue)] transition hover:bg-[var(--surface-subtle)]">
-        Open task board <Icon name="arrowRight" className="size-3.5" />
+        View all tasks <Icon name="arrowRight" className="size-3.5" />
       </Link>
     </section>
   );
