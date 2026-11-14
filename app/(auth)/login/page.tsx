@@ -57,7 +57,7 @@ export default async function Login({
           <div className="mb-8">
             <p className="mb-3 font-mono text-xs font-semibold uppercase tracking-[0.16em] text-[#2563eb]">Welcome back</p>
             <h1 className="text-[2rem] font-semibold tracking-[-0.045em] text-[#172033]">Sign in to your workspace</h1>
-            <p className="mt-2 text-sm leading-6 text-[#667085]">Use your work email to continue to TeamFlow.</p>
+            <p className="mt-2 text-sm leading-6 text-[#667085]">Use your email and password provided by your administrator.</p>
           </div>
 
           {password === "updated" && <p role="status" className="mb-5 rounded-xl border border-[#b8e4d0] bg-[#f2fbf6] px-4 py-3 text-sm text-[#176b45]">Your password is ready. You can now sign in.</p>}

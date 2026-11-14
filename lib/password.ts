@@ -1,14 +1,6 @@
 import { randomBytes } from "node:crypto";
 import argon2 from "argon2";
-import { z } from "zod";
-
-export const credentialsSchema = z.object({
-  email: z.string().trim().toLowerCase().email().max(254),
-  // Don't trim passwords: spaces are valid password characters.
-  password: z.string().min(1).max(256),
-});
-
-export const newPasswordSchema = z.string().min(12, "Use at least 12 characters.").max(128, "Password must be 128 characters or fewer.");
+export { credentialsSchema, newPasswordSchema } from "./password-validation";
 
 const argonOptions = {
   type: argon2.argon2id,

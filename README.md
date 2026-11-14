@@ -106,7 +106,11 @@ Roles are `SUPER_ADMIN`, `PRODUCT_MANAGER`, `TEAM_LEAD`, and `EMPLOYEE`.
 
 ## Password sign-in and administrator onboarding
 
-Approved users can sign in with either Google or an emailed password setup link followed by email/password. Passwords are Argon2id hashes; setup/reset links are single-use, expire after 30 minutes, and are never stored in plaintext. Password sign-in requires an active account and verified email. `POST`/browser access does not create accounts; employees are invited by an authorized organization manager from `/dashboard/employees`.
+For onboarding without an email provider, a super admin can open **Employees → Add an employee**, select **Create login with password**, and enter an initial password along with the employee's email, role, and team. This creates an active account immediately; the email is the login ID and no invitation email is sent. Share the initial credentials directly with the employee. They can change their password from the user menu under **Password & security**.
+
+For an employee who is already pending, a super admin can use **Create employee login** on their profile. This is restricted to pending accounts with no existing login and exactly one workspace membership; it cannot replace an active or shared account's credentials. Product managers retain the existing email-invitation flow.
+
+Approved users can sign in with an administrator-provided password, an emailed password setup link followed by email/password, or Google. Passwords are Argon2id hashes; setup/reset links are single-use, expire after 30 minutes, and are never stored in plaintext. Password sign-in requires an active approved account. Setup links confirm mailbox ownership, while the super-admin provisioning flow approves the account's email identifier directly. Public sign-in does not create workspace membership; an authorized administrator or manager grants access from `/dashboard/employees`.
 
 To prepare a first organization and its invited owner, configure `DATABASE_URL`, `AUTH_URL`, `RESEND_API_KEY`, and `RESEND_FROM_EMAIL` (plus the recipient in `RESEND_TEST_RECIPIENTS` outside production), then run the operator CLI with an explicit authorization reference:
 

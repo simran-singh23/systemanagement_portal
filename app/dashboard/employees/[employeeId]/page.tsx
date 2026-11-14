@@ -2,6 +2,7 @@ import type { Metadata } from "next";
 import Link from "next/link";
 import { notFound } from "next/navigation";
 import { deactivateEmployee } from "@/actions/employee.actions";
+import { InitialPasswordForm } from "@/components/people/initial-password-form";
 import { EmployeeForm } from "@/components/people/employee-form";
 import { initials, RoleBadge, StatusBadge } from "@/components/people/people-badges";
 import { Icon } from "@/components/ui/icons";
@@ -11,12 +12,12 @@ import { prisma } from "@/lib/prisma";
 
 export const metadata: Metadata = { title: "Employee profile" };
 
-export default async function EmployeeProfilePage({ params }: PageProps<"/dashboard/employees/[employeeId]">) {
-  const [{ employeeId }, { user: actor, organization, membership: actorMembership }] = await Promise.all([params, requireCurrentOrganization("members:manage")]);
+export default async function EmployeeProfilePage({ params, searchParams }: PageProps<"/dashboard/employees/[employeeId]">) {
+  const [{ employeeId }, { user: actor, organization, membership: actorMembership }, query] = await Promise.all([params, requireCurrentOrganization("members:manage"), searchParams]);
   const [membership, teams, taskCount, completedCount, reportCount, attendanceCount] = await Promise.all([
     prisma.organizationMember.findUnique({
       where: { organizationId_userId: { organizationId: organization.id, userId: employeeId } },
-      include: { user: { include: { teamMembers: { where: { team: { organizationId: organization.id } }, include: { team: true }, orderBy: employeeTeamOrder, take: 1 } } } },
+      include: { user: { include: { _count: { select: { organizationMembers: true, accounts: true, ownedOrganizations: true } }, teamMembers: { where: { team: { organizationId: organization.id } }, include: { team: true }, orderBy: employeeTeamOrder, take: 1 } } } },
     }),
     prisma.team.findMany({ where: { organizationId: organization.id }, select: { id: true, name: true }, orderBy: { name: "asc" } }),
     prisma.task.count({ where: { organizationId: organization.id, assignedToId: employeeId } }),
@@ -28,12 +29,14 @@ export default async function EmployeeProfilePage({ params }: PageProps<"/dashbo
 
   const person = membership.user;
   const primaryTeam = person.teamMembers[0]?.team;
+  const canCreateLogin = (actorMembership?.role ?? actor.role) === "SUPER_ADMIN" && person.status === "INVITED" && membership.status === "INVITED" && !person.passwordHash && person._count.organizationMembers === 1 && person._count.accounts === 0 && person._count.ownedOrganizations === 0;
   const deactivate = deactivateEmployee.bind(null, organization.id, employeeId);
   const joined = membership.joinedAt || membership.createdAt;
 
   return (
     <div className="space-y-6">
       <Link href="/dashboard/employees" className="inline-flex items-center gap-2 text-sm font-semibold text-[#667085] hover:text-[#2563eb]"><Icon name="arrowRight" className="size-4 rotate-180" /> Back to employees</Link>
+      {query.login === "created" && person.status === "ACTIVE" && person.passwordHash && <p role="status" className="rounded-xl border border-[var(--line)] bg-[var(--green-soft)] px-5 py-4 text-sm text-[var(--green)]">Login created. The employee can now sign in with {person.email} and the initial password you chose. No email was sent.</p>}
       <section className="relative overflow-hidden rounded-2xl border border-[#dfe6f3] bg-white p-5 sm:p-7">
         <span className="absolute inset-x-0 top-0 h-1" style={{ backgroundColor: primaryTeam?.color || "#2563eb" }} />
         <div className="flex flex-col gap-5 sm:flex-row sm:items-center sm:justify-between">
@@ -45,6 +48,8 @@ export default async function EmployeeProfilePage({ params }: PageProps<"/dashbo
       <section className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
         {[['Assigned tasks', taskCount], ['Completed', completedCount], ['Reports sent', reportCount], ['Days present', attendanceCount]].map(([label, value]) => <div key={label} className="rounded-2xl border border-[#e6eaf0] bg-white p-5"><p className="text-xs font-medium text-[#7c8799]">{label}</p><p className="mt-2 font-mono text-2xl font-semibold text-[#172033]">{value}</p></div>)}
       </section>
+
+      {canCreateLogin && <InitialPasswordForm organizationId={organization.id} employeeId={person.id} />}
 
       <section className="grid gap-6 xl:grid-cols-[minmax(0,1fr)_18rem]">
         <div className="overflow-hidden rounded-2xl border border-[#e6eaf0] bg-white"><div className="border-b border-[#edf0f4] bg-[#fbfcff] px-5 py-4 sm:px-7"><h2 className="font-semibold text-[#253047]">Profile and access</h2><p className="mt-1 text-xs text-[#7c8799]">Update role, department, team, or account state</p></div><div className="p-5 sm:p-7"><EmployeeForm organizationId={organization.id} actorRole={actorMembership?.role ?? actor.role} teams={teams} initial={{ id: person.id, name: person.name || "", email: person.email, jobTitle: person.jobTitle || "", department: membership.department || "", role: membership.role, status: membership.status, teamId: primaryTeam?.id || "" }} /></div></div>

@@ -10,8 +10,11 @@ import { durationMinutes } from "@/lib/date-time";
 import { sendPasswordSetupOrReset } from "@/lib/password-account";
 import { lockTransaction } from "@/lib/transaction-lock";
 import { canAssignEmployeeRole, canManageEmployeeRole, employeeTeamOrder } from "@/lib/employee-policy";
+import { employeeCreationSchema } from "@/lib/employee-login-validation";
+import { EmployeeCredentialsError, provisionInitialEmployeePassword } from "@/lib/employee-credentials";
+import { hashPassword } from "@/lib/password";
+import { initialPasswordSchema } from "@/lib/password-validation";
 import {
-  employeeSchema,
   employeeUpdateSchema,
   type FormState,
 } from "@/lib/validations";
@@ -25,6 +28,7 @@ class EmployeeInputError extends Error {
 }
 
 function employeeActionError(error: unknown): FormState {
+  if (error instanceof EmployeeCredentialsError) return { message: error.message };
   if (error instanceof EmployeeInputError) {
     return error.fieldName ? { errors: { [error.fieldName]: [error.message] } } : { message: error.message };
   }
@@ -49,7 +53,7 @@ export async function createEmployee(
   _state: FormState,
   formData: FormData,
 ): Promise<FormState> {
-  const parsed = employeeSchema.safeParse({
+  const parsed = employeeCreationSchema.safeParse({
     organizationId: field(formData, "organizationId"),
     name: field(formData, "name"),
     email: field(formData, "email"),
@@ -57,6 +61,9 @@ export async function createEmployee(
     department: field(formData, "department"),
     role: field(formData, "role"),
     teamId: field(formData, "teamId"),
+    loginMethod: field(formData, "loginMethod") || "EMAIL_INVITE",
+    password: field(formData, "password"),
+    confirmation: field(formData, "confirmation"),
   });
 
   if (!parsed.success) return { errors: parsed.error.flatten().fieldErrors };
@@ -67,12 +74,16 @@ export async function createEmployee(
   );
 
   const actorRole = actorMembership?.role ?? actor.role;
+  if (parsed.data.loginMethod === "ADMIN_PASSWORD" && actorRole !== "SUPER_ADMIN") {
+    return { message: "Only a super admin can create initial employee credentials." };
+  }
   if (!canAssignEmployeeRole(actorRole, parsed.data.role)) {
     return { message: "You cannot assign this role." };
   }
   if (parsed.data.role === "TEAM_LEAD" && !parsed.data.teamId) {
     return { errors: { teamId: ["Assign a team when granting the team lead role."] } };
   }
+  const initialPasswordHash = parsed.data.loginMethod === "ADMIN_PASSWORD" ? await hashPassword(parsed.data.password!) : null;
 
   let employee: { id: string; email: string; needsPasswordSetup: boolean };
   try {
@@ -85,6 +96,9 @@ export async function createEmployee(
       if (matches.length > 1) throw new EmployeeInputError("More than one account matches this email. Ask an administrator to resolve the duplicate before inviting.", "email");
 
       const existing = matches[0];
+      if (existing && initialPasswordHash) {
+        throw new EmployeeInputError("This email already has an account. Open its employee profile to set initial credentials if it is still pending.", "email");
+      }
       if (existing?.organizationMembers.some((membership) => membership.organizationId === parsed.data.organizationId)) {
         const membership = existing.organizationMembers.find((item) => item.organizationId === parsed.data.organizationId)!;
         throw new EmployeeInputError(
@@ -133,11 +147,14 @@ export async function createEmployee(
         if (parsed.data.role === "TEAM_LEAD") await tx.team.update({ where: { id: team.id }, data: { managerId: employee.id } });
       }
 
+      if (initialPasswordHash) {
+        await provisionInitialEmployeePassword(tx, { organizationId: parsed.data.organizationId, employeeId: employee.id, actorId: actor.id, actorRole, passwordHash: initialPasswordHash });
+      }
       await tx.activityLog.create({
-        data: { organizationId: parsed.data.organizationId, actorId: actor.id, action: "employee.invited", entityType: "user", entityId: employee.id, metadata: { role: parsed.data.role, department: parsed.data.department } },
+        data: { organizationId: parsed.data.organizationId, actorId: actor.id, action: initialPasswordHash ? "employee.created" : "employee.invited", entityType: "user", entityId: employee.id, metadata: { role: parsed.data.role, department: parsed.data.department, loginMethod: parsed.data.loginMethod } },
       });
 
-      return { id: employee.id, email: employee.email, needsPasswordSetup: !employee.passwordHash };
+      return { id: employee.id, email: employee.email, needsPasswordSetup: !initialPasswordHash && !employee.passwordHash };
     });
   } catch (error) {
     return employeeActionError(error);
@@ -152,7 +169,24 @@ export async function createEmployee(
   }
 
   revalidatePath("/dashboard/employees");
-  redirect(`/dashboard/employees/${employee.id}`);
+  redirect(`/dashboard/employees/${employee.id}${initialPasswordHash ? "?login=created" : ""}`);
+}
+
+export async function setInitialEmployeePassword(employeeId: string, _state: FormState, formData: FormData): Promise<FormState> {
+  const organizationId = field(formData, "organizationId");
+  const parsed = initialPasswordSchema.safeParse({ password: field(formData, "password"), confirmation: field(formData, "confirmation") });
+  if (!organizationId) return { message: "Workspace is required." };
+  if (!parsed.success) return { errors: parsed.error.flatten().fieldErrors };
+  const { user: actor, membership } = await requireOrganizationPermission(organizationId, "members:manage");
+  const actorRole = membership?.role ?? actor.role;
+  if (actorRole !== "SUPER_ADMIN") return { message: "Only a super admin can create initial employee credentials." };
+  const passwordHash = await hashPassword(parsed.data.password);
+  try {
+    await prisma.$transaction((tx) => provisionInitialEmployeePassword(tx, { organizationId, employeeId, actorId: actor.id, actorRole, passwordHash }));
+  } catch (error) { return employeeActionError(error); }
+  revalidatePath("/dashboard/employees");
+  revalidatePath(`/dashboard/employees/${employeeId}`);
+  redirect(`/dashboard/employees/${employeeId}?login=created`);
 }
 
 export async function updateEmployee(

@@ -1,11 +1,12 @@
 "use client";
 
 import Link from "next/link";
-import { useActionState } from "react";
+import { useActionState, useState } from "react";
 import type { UserRole, UserStatus } from "@prisma/client";
 import { createEmployee, updateEmployee } from "@/actions/employee.actions";
 import { SubmitButton } from "@/components/people/submit-button";
 import type { FormState } from "@/lib/validations";
+import { InitialPasswordFields } from "./initial-password-fields";
 
 type TeamOption = { id: string; name: string };
 type EmployeeInitial = {
@@ -33,6 +34,7 @@ export function EmployeeForm({ organizationId, actorRole, teams, initial }: Empl
   const action = initial ? updateEmployee.bind(null, initial.id) : createEmployee;
   const [result, formAction, pending] = useActionState(action, initialState);
   const state = pending ? initialState : result;
+  const [loginMethod, setLoginMethod] = useState(actorRole === "SUPER_ADMIN" ? "ADMIN_PASSWORD" : "EMAIL_INVITE");
   const roles = actorRole === "SUPER_ADMIN"
     ? ["PRODUCT_MANAGER", "TEAM_LEAD", "EMPLOYEE"] as const
     : ["TEAM_LEAD", "EMPLOYEE"] as const;
@@ -95,9 +97,18 @@ export function EmployeeForm({ organizationId, actorRole, teams, initial }: Empl
         )}
       </div>
 
+      {!initial && (actorRole === "SUPER_ADMIN" ? <fieldset className="space-y-4 rounded-xl border border-[var(--line)] p-4 sm:p-5">
+        <legend className="px-2 text-sm font-semibold text-[var(--ink)]">Login setup</legend>
+        <div className="grid gap-3 sm:grid-cols-2">
+          <label className="flex items-start gap-3 rounded-lg border border-[var(--line)] p-3 text-sm text-[var(--ink)]"><input type="radio" name="loginMethod" value="ADMIN_PASSWORD" checked={loginMethod === "ADMIN_PASSWORD"} onChange={() => setLoginMethod("ADMIN_PASSWORD")} className="mt-1" /><span><span className="font-semibold">Create login with password</span><span className="mt-1 block text-xs leading-5 text-[var(--muted)]">Active immediately. No email or Google account required.</span></span></label>
+          <label className="flex items-start gap-3 rounded-lg border border-[var(--line)] p-3 text-sm text-[var(--ink)]"><input type="radio" name="loginMethod" value="EMAIL_INVITE" checked={loginMethod === "EMAIL_INVITE"} onChange={() => setLoginMethod("EMAIL_INVITE")} className="mt-1" /><span><span className="font-semibold">Send email invitation</span><span className="mt-1 block text-xs leading-5 text-[var(--muted)]">Employee sets their own password. Requires email delivery.</span></span></label>
+        </div>
+        {loginMethod === "ADMIN_PASSWORD" && <InitialPasswordFields errors={state.errors} />}
+      </fieldset> : <input type="hidden" name="loginMethod" value="EMAIL_INVITE" />)}
+
       <div className="flex flex-wrap items-center justify-end gap-3 border-t border-[#edf0f4] pt-5">
         <Link href="/dashboard/employees" className="inline-flex h-11 items-center rounded-xl border border-[#dfe4eb] bg-white px-5 text-sm font-semibold text-[#475467] hover:bg-[#f8faff]">Cancel</Link>
-        <SubmitButton label={initial ? "Save employee" : "Invite employee"} pendingLabel={initial ? "Saving…" : "Inviting…"} />
+        <SubmitButton label={initial ? "Save employee" : loginMethod === "ADMIN_PASSWORD" ? "Create employee" : "Invite employee"} pendingLabel={initial ? "Saving…" : loginMethod === "ADMIN_PASSWORD" ? "Creating…" : "Inviting…"} />
       </div>
     </form>
   );
